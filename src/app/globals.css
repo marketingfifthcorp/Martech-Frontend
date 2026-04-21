@@ -1,0 +1,57 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  body {
+    @apply bg-surface font-body text-on-surface selection:bg-primary-fixed-dim selection:text-on-primary-fixed;
+  }
+}
+
+@layer utilities {
+  .text-kern-tight {
+    letter-spacing: -0.02em;
+  }
+  .text-kern-luxury {
+    letter-spacing: 0.05em;
+  }
+  .editorial-shadow {
+    box-shadow: 0 32px 64px -12px rgba(25, 28, 29, 0.04);
+  }
+  .editorial-shadow-lg {
+    box-shadow: 0 48px 80px -16px rgba(0, 69, 50, 0.08);
+  }
+  .glass-panel {
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+  .glass-nav {
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+  .material-symbols-outlined {
+    font-variation-settings: "FILL" 0, "wght" 300, "GRAD" 0, "opsz" 24;
+  }
+}
+
+/* Material Symbols font class */
+.material-symbols-outlined {
+  font-family: "Material Symbols Outlined";
+  font-weight: normal;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-feature-settings: "liga";
+  -webkit-font-smoothing: antialiased;
+}
