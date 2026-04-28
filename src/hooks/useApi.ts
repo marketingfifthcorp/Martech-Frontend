@@ -4,7 +4,7 @@ import { useAuth } from "@clerk/nextjs";
 import { useCallback } from "react";
 import {
   clientsApi, briefsApi, strategyApi,
-  projectsApi, postsApi, assetsApi, publishingApi, usersApi,
+  projectsApi, postsApi, assetsApi, publishingApi, usersApi, notificationsApi, socialAuthApi,
 } from "@/lib/api";
 
 /**
@@ -75,11 +75,27 @@ export function useApi() {
       getLog: async (clientId?: string) => publishingApi.getLog(await token(), clientId),
       queueProject: async (projectId: string) => publishingApi.queueProject(projectId, await token()),
       publishPost: async (postId: string) => publishingApi.publishPost(postId, await token()),
+      retryFailed: async (postId: string) => publishingApi.retryFailed(postId, await token()),
     },
     users: {
       me: async () => usersApi.me(await token()),
       list: async () => usersApi.list(await token()),
       updateRole: async (id: string, role: string) => usersApi.updateRole(id, role, await token()),
+    },
+    socialAuth: {
+      connectUrl: async (platform: string, clientId: string) =>
+        socialAuthApi.connectUrl(platform, clientId, await token()),
+      listConnections: async (clientId: string) =>
+        socialAuthApi.listConnections(clientId, await token()),
+      disconnect: async (connectionId: string, clientId: string) =>
+        socialAuthApi.disconnect(connectionId, clientId, await token()),
+    },
+    notifications: {
+      list: async (unread?: boolean) => notificationsApi.list(await token(), unread),
+      unreadCount: async () => notificationsApi.unreadCount(await token()),
+      markRead: async (id: string) => notificationsApi.markRead(id, await token()),
+      markAllRead: async () => notificationsApi.markAllRead(await token()),
+      delete: async (id: string) => notificationsApi.delete(id, await token()),
     },
   };
 }

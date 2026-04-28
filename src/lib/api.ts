@@ -158,6 +158,8 @@ export const publishingApi = {
     apiFetch<any>(`/publishing/queue/${projectId}`, { method: "POST", token }),
   publishPost: (postId: string, token: string) =>
     apiFetch<any>(`/publishing/publish/${postId}`, { method: "POST", token }),
+  retryFailed: (postId: string, token: string) =>
+    apiFetch<any>(`/publishing/retry/${postId}`, { method: "POST", token }),
 };
 
 export const usersApi = {
@@ -165,4 +167,28 @@ export const usersApi = {
   list: (token: string) => apiFetch<any[]>("/users", { token }),
   updateRole: (id: string, role: string, token: string) =>
     apiFetch<any>(`/users/${id}/role`, { method: "PATCH", body: { role }, token }),
+};
+
+export const socialAuthApi = {
+  connectUrl: (platform: string, clientId: string, token: string) =>
+    apiFetch<{ url: string }>(`/social-auth/${platform}/connect-url?clientId=${clientId}`, { token }),
+  listConnections: (clientId: string, token: string) =>
+    apiFetch<any[]>(`/social-auth/connections?clientId=${clientId}`, { token }),
+  disconnect: (connectionId: string, clientId: string, token: string) =>
+    apiFetch<any>(`/social-auth/connections/${connectionId}?clientId=${clientId}`, {
+      method: "DELETE", token,
+    }),
+};
+
+export const notificationsApi = {
+  list: (token: string, unread?: boolean) =>
+    apiFetch<any[]>(`/notifications${unread ? "?unread=true" : ""}`, { token }),
+  unreadCount: (token: string) =>
+    apiFetch<{ count: number }>("/notifications/unread-count", { token }),
+  markRead: (id: string, token: string) =>
+    apiFetch<any>(`/notifications/${id}/read`, { method: "PATCH", token }),
+  markAllRead: (token: string) =>
+    apiFetch<any>("/notifications/read-all", { method: "PATCH", token }),
+  delete: (id: string, token: string) =>
+    apiFetch<any>(`/notifications/${id}`, { method: "DELETE", token }),
 };

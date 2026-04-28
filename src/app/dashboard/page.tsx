@@ -5,6 +5,7 @@ import Link from "next/link";
 import { DashboardShell } from "@/components/layout/DashboardShell";
 import { Icon } from "@/components/ui/Icon";
 import { useApi } from "@/hooks/useApi";
+import { useRoleGuard } from "@/hooks/useRoleGuard";
 
 type ClientStatus =
   | "ONBOARDING" | "BRIEF_UPLOADED" | "STRATEGY_PENDING" | "STRATEGY_IN_REVIEW"
@@ -46,11 +47,13 @@ const PIPELINE_STAGES = ["Brief", "Strategy", "Calendar", "Design", "Live"];
 
 export default function DashboardPage() {
   const api = useApi();
+  const { checking } = useRoleGuard(["ADMIN"]);
   const [clients, setClients] = useState<any[]>([]);
   const [stats, setStats] = useState({ total: 0, active: 0, onboarding: 0, pendingApproval: 0 });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (checking) return;
     (async () => {
       try {
         const [clientData, statsData] = await Promise.all([
@@ -66,7 +69,15 @@ export default function DashboardPage() {
       }
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [checking]);
+
+  if (checking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-surface">
+        <div className="w-8 h-8 border-2 border-primary/20 border-t-primary rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <DashboardShell contextLabel="Agency Overview">

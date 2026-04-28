@@ -1,306 +1,314 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { DashboardShell } from "@/components/layout/DashboardShell";
 import { Icon } from "@/components/ui/Icon";
+import { useApi } from "@/hooks/useApi";
 
-type Post = {
-  title: string;
-  caption: string;
-  image: string;
-  platform: string;
-  platformIcon: string;
-  time: string;
-  status: "scheduled" | "processing" | "published";
-  statusLabel: string;
+const PLATFORM_ICON: Record<string, string> = {
+  instagram: "photo_camera",
+  linkedin: "work",
+  tiktok: "music_video",
+  x: "tag",
 };
 
-type Day = {
-  label: string;
-  posts: Post[];
-};
-
-const DAYS: Day[] = [
-  {
-    label: "Tomorrow, Oct 14",
-    posts: [
-      {
-        title: "The Autumn Palette: Narrative Series 01",
-        caption:
-          "Exploring the intersection of botanical architecture and seasonal transitions. #AtelierLife #AutumnDesign",
-        image:
-          "https://lh3.googleusercontent.com/aida-public/AB6AXuBEl-xbtNVMj0PpLHAJJanjoe6Ad5SvCeKp5cRKVap4N95VayfMuJUSjiPemdj9-LOFtdWAXHAYMTf8IWVSeZ0ZEL3l9EemS9dtL-5Ppc0FXgQ8gjX_V2Os6gYnFtnCXHjqA2FZcER1CPeXiPe0Ctd5nSttJgyVb6m_e-6gwJWMhqpEizkitbMaL6GWjXdfK7HSKuMOqYoNAHKGPVDTADP4MXa1LuRdGBIFwxdcaiAiRyJMDyEkyeNwg6y2A3D8WtLSADsoNhLRUsg",
-        platform: "Instagram",
-        platformIcon: "photo_camera",
-        time: "09:00 AM EST",
-        status: "scheduled",
-        statusLabel: "Scheduled",
-      },
-      {
-        title: "Quarterly Strategy: Scaling Creatively",
-        caption:
-          "Insight into how we transformed our digital ecosystem to support high-velocity creative output for our global partners.",
-        image:
-          "https://lh3.googleusercontent.com/aida-public/AB6AXuCQdhcgBgJDDTvCAOu-vZH-G0ufPj_wK0aJmxWyAP_TlsoSY-w50AkdCLmd-9oQboSPnzfrg6eMLQbmQnAPchV9mqefSRx5gVR-pCPH1C7aG5kabnNcPzqAcqDJyzB-6KUiL-iAwHDw4QWV660H8ygGs6lWiA-aluXqzSzGVPOd-S0iHfMm4mITEIkqY4YldRI9eQb0reTrspopJ7dkyFImZ1CewtrIKhlSbfcCWqs4EjoYou4Ll-PvvJsaoT__Lz_pms11Zmhwo0c",
-        platform: "LinkedIn",
-        platformIcon: "work",
-        time: "02:30 PM EST",
-        status: "processing",
-        statusLabel: "Processing",
-      },
-    ],
-  },
-  {
-    label: "Today, Oct 13",
-    posts: [
-      {
-        title: "Micro-Influencers & Macro-Results",
-        caption:
-          "Why we are shifting our focus to niche communities this year. A thread.",
-        image:
-          "https://lh3.googleusercontent.com/aida-public/AB6AXuC_9cruMO7i-5B8E2pl8a2fUuZyGc-XKoGEVdeDRi2OI3COz-kdQe6nonBgmv7ALuN6faa6GedpVbueyUzsPukXdWc1Q_PgA4YyyITLJJ8enAErrHjldxgxAEm0479ojnGv_zVzEdp2u7QxkVkbS-6uTTOK0hgf_ptrp2frUu_6lviM6JzH-L4bgWx2OQGZGfm_MBZYaQwia0677fet4oSBLbY0ei9U2vNkprJldekklVI2eQlIs9JE0yejWGwxK0TJnatTq9eXkpI",
-        platform: "X (Twitter)",
-        platformIcon: "tag",
-        time: "POSTED AT 10:15 AM",
-        status: "published",
-        statusLabel: "Published",
-      },
-    ],
-  },
-];
-
-const STATUS_CLASSES: Record<Post["status"], string> = {
-  scheduled: "bg-primary/10 text-primary",
-  processing: "bg-secondary-container/30 text-secondary",
-  published: "bg-primary/20 text-primary",
+const STATUS_CLASSES: Record<string, string> = {
+  SCHEDULED: "bg-primary/10 text-primary",
+  PUBLISHING: "bg-secondary-container/30 text-secondary",
+  PUBLISHED: "bg-emerald-100 text-emerald-700",
+  FAILED: "bg-error/10 text-error",
+  CANCELLED: "bg-secondary/10 text-secondary",
 };
 
 export default function PublishingPage() {
-  return (
-    <>
-      <header className="bg-white/80 glass-nav text-emerald-900 fixed top-0 w-full z-50 shadow-sm shadow-emerald-900/5">
-        <div className="flex justify-between items-center px-12 h-20 w-full mx-auto max-w-screen-2xl">
-          <Link
-            href="/dashboard"
-            className="text-xl font-bold tracking-tighter text-emerald-900 font-headline"
-          >
-            Atelier Martech
-          </Link>
-          <nav className="hidden md:flex items-center gap-8 font-headline tracking-tight font-semibold">
-            <Link
-              href="/approvals"
-              className="text-emerald-700/60 hover:text-emerald-900 transition-colors duration-300"
-            >
-              Approvals
-            </Link>
-            <a
-              href="#"
-              className="text-emerald-900 border-b-2 border-emerald-900 pb-1 transition-colors duration-300"
-            >
-              Calendar
-            </a>
-            <a
-              href="#"
-              className="text-emerald-700/60 hover:text-emerald-900 transition-colors duration-300"
-            >
-              History
-            </a>
-          </nav>
-          <div className="flex items-center gap-4">
-            <button className="p-2 rounded-full hover:bg-emerald-50 transition-colors">
-              <Icon name="notifications" className="text-emerald-900" />
-            </button>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              alt="User"
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuAjt_4PSRXffz87Ek7KEAFubZ9L3PbbqoyTlly5TZR2n9wCw1kWUQyldDhjAhFMEfyfJD5I32HP3Tpd0rbchQsRitIQCeEek4H3ewQE_lbbkyi06wwBO1w0u7n7Na5S71Fc-gDywXkFEbgWN5ATcMm8RLQM8iEZipGcYKc9qL93BjucnTMQ4Z6S_AFbz1qpMPLD5vJDy4oGlnYY3glft5_EVHqBEz1waC35UngvLfTRrolUtBYKXxNWcwRM-hAsOiyJvJr1dn5k4BI"
-              className="w-10 h-10 rounded-full object-cover border border-emerald-900/10"
-            />
-          </div>
-        </div>
-      </header>
+  const api = useApi();
 
-      <main className="pt-32 pb-24 px-6 md:px-24 max-w-screen-2xl mx-auto">
+  const [queue, setQueue] = useState<any[]>([]);
+  const [log, setLog] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [publishing, setPublishing] = useState<string | null>(null);
+  const [retrying, setRetrying] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function loadData() {
+    try {
+      const [queueData, logData] = await Promise.all([
+        api.publishing.getQueue(),
+        api.publishing.getLog(),
+      ]);
+      setQueue(queueData);
+      setLog(logData);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function handlePublish(postId: string) {
+    setPublishing(postId);
+    try {
+      await api.publishing.publishPost(postId);
+      await loadData();
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setPublishing(null);
+    }
+  }
+
+  async function handleRetry(postId: string) {
+    setRetrying(postId);
+    try {
+      await api.publishing.retryFailed(postId);
+      await loadData();
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setRetrying(null);
+    }
+  }
+
+  const failedCount = queue.filter((p) => p.status === "FAILED").length;
+  const scheduledCount = queue.filter((p) => p.status === "SCHEDULED").length;
+
+  if (loading) {
+    return (
+      <DashboardShell contextLabel="Publishing">
+        <div className="p-12 flex items-center justify-center min-h-screen">
+          <div className="w-8 h-8 border-2 border-primary/20 border-t-primary rounded-full animate-spin" />
+        </div>
+      </DashboardShell>
+    );
+  }
+
+  const allPosts = [...queue, ...log];
+
+  return (
+    <DashboardShell contextLabel="Publishing">
+      <div className="pt-8 pb-24 px-8 md:px-12 max-w-screen-2xl mx-auto">
+
         {/* Hero */}
-        <div className="mb-16 flex flex-col md:flex-row md:items-end justify-between gap-6">
+        <div className="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6">
           <div className="max-w-2xl">
-            <span className="text-[11px] uppercase tracking-[0.2em] text-primary font-bold mb-4 block">
-              Social Strategy
-            </span>
+            <span className="text-[11px] uppercase tracking-[0.2em] text-primary font-bold mb-4 block">Social Publishing</span>
             <h1 className="font-headline text-5xl font-extrabold tracking-tight text-on-surface leading-tight">
               Scheduled Posts Tracker
             </h1>
             <p className="mt-4 text-on-surface-variant text-lg leading-relaxed">
-              A curated overview of your upcoming digital presence. Every
-              interaction, meticulously timed and executed.
+              {queue.length > 0
+                ? `${scheduledCount} scheduled · ${failedCount > 0 ? `${failedCount} failed` : "all systems go"}`
+                : "No posts in the publishing queue."}
             </p>
           </div>
-          <div className="flex gap-3">
-            <button className="px-6 py-3 bg-surface-container-highest text-on-surface font-headline text-sm font-semibold rounded-md hover:bg-surface-dim transition-colors">
-              Filter Gallery
-            </button>
-            <button className="px-6 py-3 bg-gradient-to-br from-primary to-primary-container text-white font-headline text-sm font-semibold rounded-md shadow-lg shadow-primary/20 hover:opacity-90 transition-all">
-              Create New Post
-            </button>
-          </div>
+          <button
+            onClick={loadData}
+            className="flex items-center gap-2 px-6 py-3 bg-surface-container-highest text-on-surface font-headline text-sm font-semibold rounded-md hover:bg-surface-dim transition-colors"
+          >
+            <Icon name="refresh" />
+            Refresh
+          </button>
         </div>
 
+        {error && (
+          <div className="mb-8 p-4 bg-error/10 text-error rounded-xl text-sm">{error}</div>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+
           {/* Timeline */}
-          <div className="lg:col-span-8 space-y-12">
-            {DAYS.map((day) => (
-              <section key={day.label}>
-                <div className="flex items-center gap-4 mb-8">
-                  <h2 className="font-headline text-2xl font-bold">
-                    {day.label}
-                  </h2>
+          <div className="lg:col-span-8 space-y-10">
+
+            {/* Queue */}
+            {queue.length > 0 && (
+              <section>
+                <div className="flex items-center gap-4 mb-6">
+                  <h2 className="font-headline text-2xl font-bold">Publishing Queue</h2>
                   <div className="h-px flex-grow bg-outline-variant/30" />
+                  <span className="text-xs font-bold text-primary uppercase tracking-widest">{queue.length} posts</span>
                 </div>
-                <div className="space-y-6">
-                  {day.posts.map((p) => (
+                <div className="space-y-5">
+                  {queue.map((item: any) => (
                     <div
-                      key={p.title}
-                      className={`group relative flex flex-col md:flex-row gap-8 p-8 rounded-xl transition-all duration-500 overflow-hidden ${
-                        p.status === "published"
-                          ? "bg-surface-container-low/50 opacity-80"
-                          : "bg-surface-container-lowest hover:shadow-2xl hover:shadow-emerald-900/5"
-                      }`}
+                      key={item.id}
+                      className={`group relative flex flex-col md:flex-row gap-6 p-7 rounded-xl transition-all duration-300 bg-surface-container-lowest hover:shadow-xl hover:shadow-emerald-900/5
+                        ${item.status === "FAILED" ? "border border-error/20" : ""}`}
                     >
-                      <div className="w-full md:w-48 h-48 flex-shrink-0 rounded-lg overflow-hidden bg-surface-container">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          alt={p.title}
-                          src={p.image}
-                          className={`w-full h-full object-cover transition-transform duration-700 ${
-                            p.status === "published"
-                              ? "grayscale"
-                              : "group-hover:scale-105"
-                          }`}
-                        />
-                      </div>
                       <div className="flex flex-col justify-between flex-grow">
                         <div>
                           <div className="flex items-center justify-between mb-3">
                             <div className="flex items-center gap-2">
                               <div className="w-8 h-8 rounded-full bg-emerald-50 flex items-center justify-center">
-                                <Icon
-                                  name={p.platformIcon}
-                                  className="text-lg text-emerald-900"
-                                />
+                                <Icon name={PLATFORM_ICON[item.platform] || "share"} className="text-lg text-primary" />
                               </div>
                               <span className="text-[11px] uppercase tracking-widest text-on-surface-variant font-semibold">
-                                {p.platform}
+                                {item.platform}
                               </span>
                             </div>
-                            <div
-                              className={`px-4 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-widest ${STATUS_CLASSES[p.status]}`}
-                            >
-                              {p.statusLabel}
+                            <div className={`px-4 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-widest ${STATUS_CLASSES[item.status] || "bg-secondary/10 text-secondary"}`}>
+                              {item.status}
                             </div>
                           </div>
-                          <h3 className="font-headline text-xl font-bold mb-2">
-                            {p.title}
-                          </h3>
-                          <p className="text-on-surface-variant line-clamp-2 text-sm leading-relaxed">
-                            {p.caption}
-                          </p>
+                          <h3 className="font-headline text-lg font-bold mb-1">{item.post?.topic || "Scheduled Post"}</h3>
+                          {item.post?.caption && (
+                            <p className="text-on-surface-variant line-clamp-2 text-sm leading-relaxed italic">
+                              &ldquo;{item.post.caption}&rdquo;
+                            </p>
+                          )}
                         </div>
-                        <div className="mt-6 flex items-center gap-6">
-                          <div
-                            className={`flex items-center gap-2 ${p.status === "published" ? "text-on-surface-variant" : "text-primary"}`}
-                          >
-                            <Icon
-                              name={
-                                p.status === "published"
-                                  ? "check_circle"
-                                  : "schedule"
-                              }
-                              className="text-base"
-                            />
+                        <div className="mt-5 flex items-center gap-6">
+                          <div className="flex items-center gap-2 text-primary">
+                            <Icon name="schedule" className="text-base" />
                             <span className="text-[11px] font-bold tracking-widest">
-                              {p.time}
+                              {item.scheduledAt
+                                ? new Date(item.scheduledAt).toLocaleDateString("en", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+                                : "Unscheduled"}
                             </span>
                           </div>
-                          {p.status === "published" ? (
-                            <button className="text-primary hover:underline text-[11px] font-bold tracking-widest flex items-center gap-1">
-                              VIEW ANALYTICS
-                              <Icon
-                                name="north_east"
-                                className="text-sm"
-                              />
-                            </button>
-                          ) : (
-                            <>
-                              <button className="text-on-surface-variant hover:text-primary transition-colors">
-                                <Icon name="edit" />
-                              </button>
-                              {p.status === "scheduled" && (
-                                <button className="text-on-surface-variant hover:text-error transition-colors">
-                                  <Icon name="delete" />
-                                </button>
+                          {item.status === "SCHEDULED" && (
+                            <button
+                              onClick={() => handlePublish(item.postId)}
+                              disabled={publishing === item.id}
+                              className="text-[11px] uppercase tracking-widest font-bold text-white bg-primary px-4 py-2 rounded hover:bg-primary-container transition-colors disabled:opacity-50 flex items-center gap-1"
+                            >
+                              {publishing === item.id ? (
+                                <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                              ) : (
+                                <><Icon name="send" className="text-sm" /> Publish Now</>
                               )}
-                            </>
+                            </button>
                           )}
+                          {item.status === "FAILED" && (
+                            <div className="flex items-center gap-3">
+                              {item.errorMessage && (
+                                <span className="text-[10px] text-error">{item.errorMessage}</span>
+                              )}
+                              <button
+                                onClick={() => handleRetry(item.postId)}
+                                disabled={retrying === item.postId}
+                                className="text-[11px] uppercase tracking-widest font-bold text-error border border-error/30 px-4 py-2 rounded hover:bg-error/5 transition-colors disabled:opacity-50"
+                              >
+                                {retrying === item.postId ? "Retrying…" : "Retry"}
+                              </button>
+                            </div>
+                          )}
+                          <Link
+                            href={`/post-review?postId=${item.postId}`}
+                            className="text-on-surface-variant hover:text-primary transition-colors"
+                          >
+                            <Icon name="open_in_new" />
+                          </Link>
                         </div>
                       </div>
                     </div>
                   ))}
                 </div>
               </section>
-            ))}
+            )}
+
+            {/* Publish log */}
+            {log.length > 0 && (
+              <section>
+                <div className="flex items-center gap-4 mb-6">
+                  <h2 className="font-headline text-2xl font-bold">Published</h2>
+                  <div className="h-px flex-grow bg-outline-variant/30" />
+                  <span className="text-xs font-bold text-emerald-600 uppercase tracking-widest">{log.length} posts</span>
+                </div>
+                <div className="space-y-4">
+                  {log.map((item: any) => (
+                    <div key={item.id} className="flex items-center gap-5 p-6 rounded-xl bg-surface-container-low/50 opacity-80">
+                      <div className="w-8 h-8 rounded-full bg-emerald-50 flex items-center justify-center shrink-0">
+                        <Icon name={PLATFORM_ICON[item.platform] || "share"} className="text-lg text-emerald-700" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-headline font-bold text-base line-clamp-1">{item.post?.topic || "Published Post"}</h3>
+                        <p className="text-xs text-on-surface-variant capitalize">{item.platform}</p>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <div className="flex items-center gap-1.5 text-emerald-600">
+                          <Icon name="check_circle" className="text-base" />
+                          <span className="text-[11px] font-bold tracking-widest uppercase">
+                            {item.publishedAt
+                              ? new Date(item.publishedAt).toLocaleDateString("en", { month: "short", day: "numeric" })
+                              : "Published"}
+                          </span>
+                        </div>
+                        {item.liveUrl && (
+                          <a
+                            href={item.liveUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-primary hover:underline text-[11px] font-bold tracking-widest flex items-center gap-1"
+                          >
+                            VIEW LIVE
+                            <Icon name="north_east" className="text-sm" />
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Empty */}
+            {queue.length === 0 && log.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-24 text-center">
+                <Icon name="send" className="text-6xl text-primary/20 mb-6" />
+                <h3 className="text-xl font-headline font-bold text-on-surface mb-2">Queue is empty</h3>
+                <p className="text-on-surface-variant text-sm max-w-sm">
+                  Approve posts and move projects to the publishing queue to see them here.
+                </p>
+                <Link href="/dashboard" className="text-primary hover:underline text-sm mt-4">← Dashboard</Link>
+              </div>
+            )}
           </div>
 
           {/* Sidebar */}
-          <aside className="lg:col-span-4 space-y-10">
-            <div className="bg-surface-container-low rounded-2xl p-8 space-y-8">
+          <aside className="lg:col-span-4 space-y-8">
+            <div className="bg-surface-container-low rounded-2xl p-7 space-y-6">
               <h3 className="font-headline text-lg font-bold">Campaign Pulse</h3>
               <div className="grid grid-cols-2 gap-4">
-                <div className="bg-surface-container-lowest p-6 rounded-xl">
-                  <span className="block text-primary text-3xl font-bold mb-1">
-                    12
-                  </span>
-                  <span className="text-[10px] uppercase tracking-widest text-on-surface-variant">
-                    Scheduled
-                  </span>
+                <div className="bg-surface-container-lowest p-5 rounded-xl">
+                  <span className="block text-primary text-3xl font-bold mb-1">{scheduledCount}</span>
+                  <span className="text-[10px] uppercase tracking-widest text-on-surface-variant">Scheduled</span>
                 </div>
-                <div className="bg-surface-container-lowest p-6 rounded-xl">
-                  <span className="block text-emerald-600 text-3xl font-bold mb-1">
-                    48
-                  </span>
-                  <span className="text-[10px] uppercase tracking-widest text-on-surface-variant">
-                    Published
-                  </span>
+                <div className="bg-surface-container-lowest p-5 rounded-xl">
+                  <span className="block text-emerald-600 text-3xl font-bold mb-1">{log.length}</span>
+                  <span className="text-[10px] uppercase tracking-widest text-on-surface-variant">Published</span>
                 </div>
-              </div>
-              <div className="space-y-4">
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-on-surface-variant">Approval Queue</span>
-                  <span className="font-bold">4 Pending</span>
-                </div>
-                <div className="w-full bg-surface-container-highest h-1 rounded-full overflow-hidden">
-                  <div className="bg-primary h-full w-3/4" />
-                </div>
+                {failedCount > 0 && (
+                  <div className="col-span-2 bg-error/5 p-4 rounded-xl border border-error/20">
+                    <span className="block text-error text-2xl font-bold mb-1">{failedCount}</span>
+                    <span className="text-[10px] uppercase tracking-widest text-error">Failed — needs attention</span>
+                  </div>
+                )}
               </div>
             </div>
 
-            <div className="relative bg-surface-container-lowest rounded-2xl p-8 shadow-xl shadow-emerald-900/5 border border-primary/5 overflow-hidden">
+            <div className="relative bg-surface-container-lowest rounded-2xl p-7 shadow-xl shadow-emerald-900/5 border border-primary/5 overflow-hidden">
               <div className="relative z-10">
-                <span className="text-[10px] uppercase tracking-widest text-primary font-bold mb-4 block">
-                  Recommended Action
-                </span>
-                <h4 className="font-headline text-xl font-bold mb-4 pr-12">
-                  Optimize your LinkedIn reach with a carousel.
+                <span className="text-[10px] uppercase tracking-widest text-primary font-bold mb-3 block">Publishing Status</span>
+                <h4 className="font-headline text-lg font-bold mb-3">
+                  {failedCount > 0 ? "Action Required" : "All Systems Go"}
                 </h4>
-                <button className="mt-4 flex items-center gap-2 text-primary font-headline text-sm font-bold group">
-                  Explore Templates
-                  <Icon
-                    name="arrow_forward"
-                    className="group-hover:translate-x-1 transition-transform"
-                  />
-                </button>
+                <p className="text-sm text-on-surface-variant leading-relaxed">
+                  {failedCount > 0
+                    ? `${failedCount} post${failedCount !== 1 ? "s" : ""} failed to publish. Review and retry.`
+                    : "Your publishing queue is healthy. Posts will go live at their scheduled times."}
+                </p>
               </div>
               <div className="absolute -right-12 -bottom-12 w-48 h-48 bg-primary/5 rounded-full blur-3xl" />
             </div>
           </aside>
         </div>
-      </main>
-    </>
+      </div>
+    </DashboardShell>
   );
 }

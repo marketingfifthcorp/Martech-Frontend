@@ -1,271 +1,283 @@
+"use client";
+
+import { useEffect, useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { DashboardShell } from "@/components/layout/DashboardShell";
 import { Icon } from "@/components/ui/Icon";
+import { useApi } from "@/hooks/useApi";
 
-type Post = {
-  title: string;
-  platform: string;
-  platformIcon: string;
-  platformColor: string;
-  image: string;
-  caption: string;
-  status: "scheduled" | "review" | "draft";
-  statusLabel: string;
-  date: string;
-  time: string;
+const PLATFORM_ICON: Record<string, string> = {
+  instagram: "camera",
+  linkedin: "work",
+  tiktok: "music_video",
+  x: "tag",
 };
 
-const POSTS: Post[] = [
-  {
-    title: "Autumn Collection Reveal",
-    platform: "Instagram Reel",
-    platformIcon: "camera",
-    platformColor: "text-[#E4405F]",
-    image:
-      "https://lh3.googleusercontent.com/aida-public/AB6AXuBrPduzZUpjAjdFXa0_Kr9dmNZjGKh1VFcu-AIv_Y0djeWBOMUV6ZkK9l4q35xdSPqt5hAHul5l1fJAXufLYjYVI4Zm5tBnYIyN3iycz1TSQCHwJCNKi46Vm_Uc3h7u1afxZ45xV_6dz6FPlvP3So5eavA9SqT2Zuzj4l0AD-SyDDgTPSwm0qiigWSqaJO7zKzkzKD6WXajpyfFD9q-l7Xb3Z3T8DL28mzqArVLmGGaUGKjnCPwh0j3BohSNiq_jmRR0LbFCiThg9E",
-    caption:
-      "The wait is almost over. Experience the essence of redefined luxury with our curated Autumn 23' capsule... #luxury #fashion",
-    status: "scheduled",
-    statusLabel: "SCHEDULED",
-    date: "Oct 24, 2023",
-    time: "09:00 AM EST",
-  },
-  {
-    title: "Future of Workspace",
-    platform: "LinkedIn Post",
-    platformIcon: "work",
-    platformColor: "text-[#0A66C2]",
-    image:
-      "https://lh3.googleusercontent.com/aida-public/AB6AXuD54rI1uWwDLfLPmR0Px39trGyxIEzCJCEqww9lzMZnu49vfz4977B1e_15clRY6TZZGCnZVdcJe6Y0bP6-C6jF3Jsc3ukpCjdR432sv9wQKATUjF40YCy8atnA1vTe1nDv9QMflG8drb2yOv6uJfK3FHpsckNkLO-Lv8a3KAB1C9KQXdm9T9zKU345FJ5u2nmxJkQjKYOXRYWxtUDZgwOHRjh-7dWSVe7eUhKzu98oZkssURfaIHzqf0o1ir52Ao--Gq7BcJiNRNw",
-    caption:
-      "How physical space defines brand culture. Our latest study into the 'Atelier' mindset and efficiency...",
-    status: "review",
-    statusLabel: "CLIENT REVIEW",
-    date: "Oct 26, 2023",
-    time: "01:30 PM EST",
-  },
-  {
-    title: "Industry Insights X",
-    platform: "X / Twitter Thread",
-    platformIcon: "close",
-    platformColor: "text-stone-900",
-    image:
-      "https://lh3.googleusercontent.com/aida-public/AB6AXuAX2-vQUDdvu-M_gnwbZA8PiBe47y3MHwJNxaSjZcNfEMdMLIwMWMvvvktcP7Epg_rO5bZnF1DH2n38UHmcP__4QLbW08Wc_BUJqH1zMF1H-16UsGAPrE_V4Q0Zy-8hVB5YjqRwcNTMCK4FRQy4vSDpHe-Qx5dpTiO5TaQQvRu_0xvsYnU5EhYPKexI0WimBYgNbH4VBdb0ZkUcRuMZjZunLxEr7tEakquNaIg6aEK6_rXnb4u-w8Oz828wdDAf6wqRQSrQoFWnlhE",
-    caption:
-      "1/7 Modern marketing isn't about volume, it's about curation. Here is why luxury brands are opting out of algorithmic trends...",
-    status: "draft",
-    statusLabel: "DRAFT",
-    date: "Oct 28, 2023",
-    time: "Tentative",
-  },
-];
-
-const STATUS_CLASSES: Record<Post["status"], string> = {
-  scheduled: "bg-primary/10 text-primary",
-  review: "bg-tertiary/10 text-tertiary",
-  draft: "bg-secondary/10 text-secondary",
+const STATUS_CLASSES: Record<string, string> = {
+  DRAFT: "bg-secondary/10 text-secondary",
+  IN_DESIGN: "bg-secondary/10 text-secondary",
+  CREATIVE_UPLOADED: "bg-primary/10 text-primary",
+  AWAITING_APPROVAL: "bg-tertiary/10 text-tertiary",
+  REVISION_REQUIRED: "bg-error/10 text-error",
+  APPROVED: "bg-emerald-100 text-emerald-700",
+  SCHEDULED: "bg-emerald-100 text-emerald-700",
+  PUBLISHED: "bg-emerald-100 text-emerald-700",
+  FAILED: "bg-error/10 text-error",
 };
 
-const STATUS_DOT: Record<Post["status"], string> = {
-  scheduled: "bg-primary",
-  review: "bg-tertiary",
-  draft: "bg-secondary",
+const STATUS_DOT: Record<string, string> = {
+  DRAFT: "bg-secondary",
+  IN_DESIGN: "bg-secondary",
+  CREATIVE_UPLOADED: "bg-primary",
+  AWAITING_APPROVAL: "bg-tertiary",
+  REVISION_REQUIRED: "bg-error",
+  APPROVED: "bg-emerald-600",
+  SCHEDULED: "bg-emerald-600",
+  PUBLISHED: "bg-emerald-600",
+  FAILED: "bg-error",
 };
 
-export default function ContentCalendarPage() {
+function ContentCalendarInner() {
+  const searchParams = useSearchParams();
+  const projectId = searchParams.get("projectId");
+  const api = useApi();
+
+  const [posts, setPosts] = useState<any[]>([]);
+  const [project, setProject] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!projectId) { setLoading(false); return; }
+    (async () => {
+      try {
+        const [postsData, projectData] = await Promise.all([
+          api.posts.listByProject(projectId),
+          api.projects.get(projectId),
+        ]);
+        setPosts(postsData);
+        setProject(projectData);
+      } catch (e: any) {
+        setError(e.message);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
+
+  const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const monthLabel = project
+    ? `${MONTH_NAMES[(project.month || 1) - 1]} ${project.year}`
+    : "Content Calendar";
+
+  const contextLabel = project?.client?.name || project?.title || "Content Calendar";
+  const awaitingCount = posts.filter((p) => p.status === "AWAITING_APPROVAL").length;
+
+  if (loading) {
+    return (
+      <DashboardShell contextLabel="Content Calendar">
+        <div className="p-12 flex items-center justify-center min-h-screen">
+          <div className="w-8 h-8 border-2 border-primary/20 border-t-primary rounded-full animate-spin" />
+        </div>
+      </DashboardShell>
+    );
+  }
+
+  if (!projectId || error) {
+    return (
+      <DashboardShell contextLabel="Content Calendar">
+        <div className="p-12 text-center space-y-4">
+          <p className="text-on-surface-variant">{error || "No project selected. Open a project from a client page."}</p>
+          <Link href="/dashboard" className="text-primary hover:underline text-sm">← Dashboard</Link>
+        </div>
+      </DashboardShell>
+    );
+  }
+
   return (
-    <DashboardShell contextLabel="Aria Residences">
+    <DashboardShell contextLabel={contextLabel}>
       <div className="px-8 pb-12 pt-8 min-h-screen">
+
+        {/* Header */}
         <header className="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6">
-          <div className="space-y-2">
-            <span className="uppercase tracking-[0.2em] text-on-surface-variant font-medium text-[10px]">
-              Campaign Management
-            </span>
-            <h1 className="text-4xl font-headline font-extrabold tracking-tight text-primary">
-              Content Calendar
-            </h1>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-xs text-on-surface-variant mb-2">
+              {project?.clientId && (
+                <>
+                  <Link href={`/clients/${project.clientId}`} className="hover:text-primary transition-colors">
+                    {project.client?.name || "Client"}
+                  </Link>
+                  <Icon name="chevron_right" className="text-xs" />
+                  <Link href={`/projects/${projectId}`} className="hover:text-primary transition-colors">
+                    {project.title || monthLabel}
+                  </Link>
+                  <Icon name="chevron_right" className="text-xs" />
+                </>
+              )}
+              <span className="text-on-surface font-semibold">Calendar</span>
+            </div>
+            <span className="uppercase tracking-[0.2em] text-on-surface-variant font-medium text-[10px]">Campaign Management</span>
+            <h1 className="text-4xl font-headline font-extrabold tracking-tight text-primary">Content Calendar</h1>
           </div>
+
           <div className="flex flex-wrap items-center gap-4">
             <div className="flex bg-surface-container-low p-1 rounded-lg">
-              <button className="px-4 py-2 bg-white shadow-sm rounded-md text-sm font-semibold text-primary transition-all">
+              <span className="px-4 py-2 bg-white shadow-sm rounded-md text-sm font-semibold text-primary">
                 List View
-              </button>
+              </span>
               <Link
-                href="/posting-plan"
+                href={`/posting-plan?projectId=${projectId}`}
                 className="px-4 py-2 text-sm font-semibold text-stone-500 hover:text-stone-700 transition-all"
               >
                 Timeline
               </Link>
             </div>
-            <div className="flex items-center bg-surface-container-low rounded-lg px-3 py-2 gap-3">
-              <Icon name="chevron_left" className="text-stone-400 cursor-pointer" />
-              <span className="text-sm font-bold text-primary font-headline">
-                October 2023
-              </span>
-              <Icon name="chevron_right" className="text-stone-400 cursor-pointer" />
+            <div className="flex items-center bg-surface-container-low rounded-lg px-3 py-2 gap-2">
+              <Icon name="calendar_month" className="text-primary text-sm" />
+              <span className="text-sm font-bold text-primary font-headline">{monthLabel}</span>
             </div>
-            <button className="flex items-center gap-2 px-6 py-2.5 bg-primary text-white rounded-md text-sm font-bold transition-all hover:shadow-lg active:scale-95">
-              <Icon name="add" className="text-lg" />
-              New Post
-            </button>
           </div>
         </header>
 
-        {/* Bento metrics */}
+        {/* Metrics */}
         <section className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
           <div className="bg-surface-container-lowest p-6 rounded-xl shadow-sm border border-outline-variant/10 flex flex-col justify-between">
-            <span className="uppercase tracking-widest text-[10px] text-stone-400">
-              Total Posts
-            </span>
+            <span className="uppercase tracking-widest text-[10px] text-stone-400">Total Posts</span>
             <div className="mt-4 flex items-end justify-between">
-              <span className="text-3xl font-headline font-bold text-primary">
-                24
-              </span>
-              <span className="text-emerald-600 text-xs font-bold">
-                +12% vs last month
-              </span>
+              <span className="text-3xl font-headline font-bold text-primary">{String(posts.length).padStart(2, "0")}</span>
             </div>
           </div>
           <div className="bg-surface-container-lowest p-6 rounded-xl shadow-sm border border-outline-variant/10 flex flex-col justify-between">
-            <span className="uppercase tracking-widest text-[10px] text-stone-400">
-              Awaiting Approval
-            </span>
+            <span className="uppercase tracking-widest text-[10px] text-stone-400">Awaiting Approval</span>
             <div className="mt-4 flex items-end justify-between">
-              <span className="text-3xl font-headline font-bold text-tertiary">
-                08
-              </span>
-              <span className="bg-tertiary/10 text-tertiary px-2 py-0.5 rounded text-[10px] font-bold">
-                Action Required
+              <span className="text-3xl font-headline font-bold text-tertiary">{String(awaitingCount).padStart(2, "0")}</span>
+              {awaitingCount > 0 && (
+                <span className="bg-tertiary/10 text-tertiary px-2 py-0.5 rounded text-[10px] font-bold">Action Required</span>
+              )}
+            </div>
+          </div>
+          <div className="bg-surface-container-lowest p-6 rounded-xl shadow-sm border border-outline-variant/10 flex flex-col justify-between">
+            <span className="uppercase tracking-widest text-[10px] text-stone-400">Approved</span>
+            <div className="mt-4">
+              <span className="text-3xl font-headline font-bold text-emerald-600">
+                {String(posts.filter((p) => ["APPROVED","SCHEDULED","PUBLISHED"].includes(p.status)).length).padStart(2, "0")}
               </span>
             </div>
           </div>
-          <div className="md:col-span-2 bg-primary text-white p-6 rounded-xl shadow-xl flex items-center justify-between relative overflow-hidden">
+          <div className="md:col-span-1 bg-primary text-white p-6 rounded-xl shadow-xl flex items-center justify-between relative overflow-hidden">
             <div className="relative z-10">
-              <h3 className="text-xl font-headline font-bold">
-                Client Review Sync
-              </h3>
-              <p className="text-primary-fixed-dim text-sm mt-1">
-                Next session in 2 hours with &apos;Luxe Living&apos;
-              </p>
+              <h3 className="text-base font-headline font-bold">{project?.title || monthLabel}</h3>
+              <p className="text-primary-fixed-dim text-xs mt-1 capitalize">{project?.status?.replace(/_/g, " ")}</p>
             </div>
-            <button className="relative z-10 bg-white/10 hover:bg-white/20 backdrop-blur-md px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all">
-              Join Call
-            </button>
+            <Link
+              href={`/projects/${projectId}`}
+              className="relative z-10 bg-white/10 hover:bg-white/20 backdrop-blur-md px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all"
+            >
+              Project
+            </Link>
             <div className="absolute -right-4 -bottom-4 opacity-10">
-              <Icon name="video_call" className="text-[120px]" />
+              <Icon name="calendar_month" className="text-[120px]" />
             </div>
           </div>
         </section>
 
         {/* Post table */}
-        <div className="bg-surface-container-lowest rounded-xl shadow-sm overflow-x-auto border border-outline-variant/5">
-          <table className="w-full text-left border-collapse min-w-[860px]">
-            <thead>
-              <tr className="bg-surface-container-low/50">
-                <th className="px-8 py-4 uppercase tracking-widest text-[10px] font-bold text-stone-500">
-                  Post Info
-                </th>
-                <th className="px-6 py-4 uppercase tracking-widest text-[10px] font-bold text-stone-500">
-                  Caption Preview
-                </th>
-                <th className="px-6 py-4 uppercase tracking-widest text-[10px] font-bold text-stone-500">
-                  Status
-                </th>
-                <th className="px-6 py-4 uppercase tracking-widest text-[10px] font-bold text-stone-500">
-                  Schedule
-                </th>
-                <th className="px-8 py-4 text-right" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-surface-container">
-              {POSTS.map((p) => (
-                <tr
-                  key={p.title}
-                  className="group hover:bg-surface-container-low/30 transition-colors"
-                >
-                  <td className="px-8 py-6">
-                    <div className="flex items-center gap-4">
-                      <div className="relative">
-                        <div className="w-16 h-16 rounded-lg overflow-hidden bg-surface-container">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            alt={p.title}
-                            src={p.image}
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                        <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-white rounded-full flex items-center justify-center shadow-sm">
-                          <Icon
-                            name={p.platformIcon}
-                            className={`text-sm ${p.platformColor}`}
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <p className="font-headline font-bold text-on-surface">
-                          {p.title}
-                        </p>
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400 mt-1">
-                          {p.platform}
-                        </p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-6">
-                    <p className="text-sm text-on-surface-variant max-w-xs line-clamp-2">
-                      {p.caption}
-                    </p>
-                  </td>
-                  <td className="px-6 py-6">
-                    <span
-                      className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-bold ${STATUS_CLASSES[p.status]}`}
-                    >
-                      <span
-                        className={`w-1.5 h-1.5 rounded-full mr-2 ${STATUS_DOT[p.status]}`}
-                      />
-                      {p.statusLabel}
-                    </span>
-                  </td>
-                  <td className="px-6 py-6">
-                    <div className="text-sm">
-                      <p className="font-semibold text-on-surface">{p.date}</p>
-                      <p className="text-stone-400 text-xs">{p.time}</p>
-                    </div>
-                  </td>
-                  <td className="px-8 py-6 text-right">
-                    <Link
-                      href="/post-review"
-                      className="opacity-0 group-hover:opacity-100 p-2 hover:bg-surface-container-high rounded-lg transition-all inline-flex"
-                    >
-                      <Icon name="more_horiz" className="text-stone-400" />
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <footer className="mt-8 flex items-center justify-between">
-          <p className="text-xs text-stone-400 font-medium uppercase tracking-widest">
-            Showing 1-12 of 24 posts
-          </p>
-          <div className="flex gap-2">
-            <button className="p-2 border border-outline-variant/20 rounded hover:bg-white transition-all">
-              <Icon name="keyboard_arrow_left" className="text-sm" />
-            </button>
-            <button className="p-2 border border-outline-variant/20 rounded bg-white font-bold text-xs px-4">
-              1
-            </button>
-            <button className="p-2 border border-outline-variant/20 rounded hover:bg-white text-xs px-4">
-              2
-            </button>
-            <button className="p-2 border border-outline-variant/20 rounded hover:bg-white transition-all">
-              <Icon name="keyboard_arrow_right" className="text-sm" />
-            </button>
+        {posts.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-24 text-center">
+            <Icon name="calendar_month" className="text-6xl text-primary/20 mb-6" />
+            <p className="text-on-surface-variant text-sm">No posts in this calendar yet.</p>
+            <Link href={`/projects/${projectId}`} className="text-primary hover:underline text-sm mt-3">
+              ← Back to project to generate calendar
+            </Link>
           </div>
-        </footer>
+        ) : (
+          <>
+            <div className="bg-surface-container-lowest rounded-xl shadow-sm overflow-x-auto border border-outline-variant/5">
+              <table className="w-full text-left border-collapse min-w-[860px]">
+                <thead>
+                  <tr className="bg-surface-container-low/50">
+                    <th className="px-8 py-4 uppercase tracking-widest text-[10px] font-bold text-stone-500">Post</th>
+                    <th className="px-6 py-4 uppercase tracking-widest text-[10px] font-bold text-stone-500">Caption Preview</th>
+                    <th className="px-6 py-4 uppercase tracking-widest text-[10px] font-bold text-stone-500">Status</th>
+                    <th className="px-6 py-4 uppercase tracking-widest text-[10px] font-bold text-stone-500">Schedule</th>
+                    <th className="px-8 py-4 text-right" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-surface-container">
+                  {posts.map((post: any) => (
+                    <tr key={post.id} className="group hover:bg-surface-container-low/30 transition-colors">
+                      <td className="px-8 py-6">
+                        <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 rounded-full bg-secondary-container flex items-center justify-center shrink-0">
+                            <Icon name={PLATFORM_ICON[post.platform] || "share"} className="text-on-secondary-container" />
+                          </div>
+                          <div>
+                            <p className="font-headline font-bold text-on-surface line-clamp-1">{post.topic}</p>
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400 mt-0.5">
+                              {post.platform} · {post.format}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-6">
+                        <p className="text-sm text-on-surface-variant max-w-xs line-clamp-2">{post.caption}</p>
+                      </td>
+                      <td className="px-6 py-6">
+                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-bold ${STATUS_CLASSES[post.status] || "bg-secondary/10 text-secondary"}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full mr-2 ${STATUS_DOT[post.status] || "bg-secondary"}`} />
+                          {post.status?.replace(/_/g, " ")}
+                        </span>
+                      </td>
+                      <td className="px-6 py-6">
+                        <div className="text-sm">
+                          <p className="font-semibold text-on-surface">
+                            {post.scheduledDate
+                              ? new Date(post.scheduledDate).toLocaleDateString("en", { month: "short", day: "numeric", year: "numeric" })
+                              : "—"}
+                          </p>
+                          <p className="text-stone-400 text-xs capitalize">{post.objective}</p>
+                        </div>
+                      </td>
+                      <td className="px-8 py-6 text-right">
+                        <Link
+                          href={`/post-review?postId=${post.id}`}
+                          className="opacity-0 group-hover:opacity-100 p-2 hover:bg-surface-container-high rounded-lg transition-all inline-flex"
+                        >
+                          <Icon name="arrow_forward" className="text-stone-400" />
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <footer className="mt-8 flex items-center justify-between">
+              <p className="text-xs text-stone-400 font-medium uppercase tracking-widest">
+                {posts.length} post{posts.length !== 1 ? "s" : ""} this month
+              </p>
+              <Link
+                href={`/posting-plan?projectId=${projectId}`}
+                className="text-primary font-headline text-xs font-bold uppercase tracking-widest border-b border-primary/20 pb-1 hover:border-primary transition-all"
+              >
+                View Timeline →
+              </Link>
+            </footer>
+          </>
+        )}
       </div>
     </DashboardShell>
   );
+}
+
+const Spinner = () => (
+  <div className="min-h-screen flex items-center justify-center bg-surface">
+    <div className="w-8 h-8 border-2 border-primary/20 border-t-primary rounded-full animate-spin" />
+  </div>
+);
+
+export default function ContentCalendarPage() {
+  return <Suspense fallback={<Spinner />}><ContentCalendarInner /></Suspense>;
 }
