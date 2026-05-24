@@ -611,7 +611,7 @@ function StrategyInner() {
               <div className="h-px flex-grow bg-outline-variant/30" />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {platformEntries.map(([platform, data]: [string, any]) => (
+              {(platformEntries as [string, any][]).map(([platform, data]) => (
                 <div key={platform} className="bg-surface-container-lowest p-6 rounded-xl shadow-sm border border-outline-variant/10">
                   <h3 className="font-headline font-bold capitalize mb-4 text-primary">{platform}</h3>
                   <div className="space-y-3 text-sm">
