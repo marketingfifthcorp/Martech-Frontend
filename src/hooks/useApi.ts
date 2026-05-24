@@ -47,6 +47,7 @@ export function useApi() {
       get: async (id: string) => strategyApi.get(id, await token()),
       update: async (id: string, data: any) => strategyApi.update(id, data, await token()),
       sendToClient: async (id: string) => strategyApi.sendToClient(id, await token()),
+      resend: async (id: string) => strategyApi.resend(id, await token()),
       approve: async (id: string, action: "APPROVED" | "CHANGES_REQUESTED", comment: string) =>
         strategyApi.approve(id, action, comment, await token()),
     },
@@ -64,6 +65,9 @@ export function useApi() {
       update: async (id: string, data: any) => postsApi.update(id, data, await token()),
       approve: async (id: string, action: "APPROVED" | "CHANGES_REQUESTED", comment: string) =>
         postsApi.approve(id, action, comment, await token()),
+      expandCaption: async (id: string) => postsApi.expandCaption(id, await token()),
+      improveField: async (id: string, field: string, instruction: string) =>
+        postsApi.improveField(id, field, instruction, await token()),
     },
     assets: {
       upload: async (postId: string, file: File, notes: string) =>

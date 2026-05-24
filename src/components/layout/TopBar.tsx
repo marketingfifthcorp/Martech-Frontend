@@ -9,6 +9,7 @@ import { useApi } from "@/hooks/useApi";
 type TopBarProps = {
   searchPlaceholder?: string;
   contextLabel?: string;
+  onMenuClick?: () => void;
 };
 
 const TYPE_ICON: Record<string, string> = {
@@ -19,9 +20,18 @@ const TYPE_ICON: Record<string, string> = {
   revision_requested: "edit_note",
 };
 
+const TYPE_COLOR: Record<string, string> = {
+  strategy_ready: "bg-violet-100 text-violet-600",
+  approval_needed: "bg-amber-100 text-amber-600",
+  post_approved: "bg-emerald-100 text-emerald-700",
+  published: "bg-sky-100 text-sky-600",
+  revision_requested: "bg-rose-100 text-rose-600",
+};
+
 export function TopBar({
   searchPlaceholder = "Search clients or campaigns...",
   contextLabel = "All Clients",
+  onMenuClick,
 }: TopBarProps) {
   const api = useApi();
   const router = useRouter();
@@ -33,7 +43,7 @@ export function TopBar({
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    (async () => {
+    async function fetchInitial() {
       try {
         const [me, { count }] = await Promise.all([
           api.users.me(),
@@ -42,7 +52,15 @@ export function TopBar({
         setUser(me);
         setUnreadCount(count);
       } catch {}
-    })();
+    }
+    fetchInitial();
+    const interval = setInterval(async () => {
+      try {
+        const { count } = await api.notifications.unreadCount();
+        setUnreadCount(count);
+      } catch {}
+    }, 30_000);
+    return () => clearInterval(interval);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -95,9 +113,18 @@ export function TopBar({
   const displayRole = user?.role || "";
 
   return (
-    <header className="fixed top-0 right-0 left-64 z-30 h-16 bg-white/80 glass-nav px-8 flex justify-between items-center shadow-sm shadow-emerald-900/5">
+    <header className="fixed top-0 right-0 left-0 lg:left-64 z-30 h-16 bg-white/80 glass-nav px-4 lg:px-8 flex justify-between items-center shadow-sm shadow-emerald-900/5">
+      {/* Hamburger — mobile only */}
+      <button
+        onClick={onMenuClick}
+        className="lg:hidden p-2 mr-2 text-stone-500 hover:bg-stone-100 rounded-lg transition-colors shrink-0"
+        aria-label="Open menu"
+      >
+        <Icon name="menu" />
+      </button>
+
       <div className="flex items-center flex-1 max-w-2xl">
-        <div className="relative w-full max-w-md">
+        <div className="relative w-full max-w-md hidden sm:block">
           <Icon
             name="search"
             className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400"
@@ -108,8 +135,8 @@ export function TopBar({
             type="text"
           />
         </div>
-        <div className="ml-6 h-8 w-px bg-outline-variant/30" />
-        <button className="ml-6 flex items-center space-x-2 text-emerald-900 font-headline font-semibold text-sm hover:opacity-70 transition-opacity">
+        <div className="ml-6 h-8 w-px bg-outline-variant/30 hidden sm:block" />
+        <button className="ml-6 hidden sm:flex items-center space-x-2 text-emerald-900 font-headline font-semibold text-sm hover:opacity-70 transition-opacity">
           <span>{contextLabel}</span>
           <Icon name="expand_more" className="text-sm" />
         </button>
@@ -162,7 +189,7 @@ export function TopBar({
                         }`}
                       >
                         <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-                          !n.isRead ? "bg-primary/10 text-primary" : "bg-surface-container text-on-surface-variant"
+                          TYPE_COLOR[n.type] || (!n.isRead ? "bg-primary/10 text-primary" : "bg-surface-container text-on-surface-variant")
                         }`}>
                           <Icon name={TYPE_ICON[n.type] || "circle_notifications"} className="text-sm" />
                         </div>
@@ -200,8 +227,8 @@ export function TopBar({
         </div>
 
         {/* User info */}
-        <div className="flex items-center space-x-3 pl-6 border-l border-outline-variant/30">
-          <div className="text-right">
+        <div className="flex items-center space-x-3 pl-4 lg:pl-6 border-l border-outline-variant/30">
+          <div className="text-right hidden sm:block">
             <p className="text-xs font-bold font-headline tracking-tight text-emerald-900">
               {displayName}
             </p>

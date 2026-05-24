@@ -6,6 +6,7 @@ import { DashboardShell } from "@/components/layout/DashboardShell";
 import { Icon } from "@/components/ui/Icon";
 import { useApi } from "@/hooks/useApi";
 import { useRoleGuard } from "@/hooks/useRoleGuard";
+import { useToast } from "@/components/ui/Toast";
 
 const PLATFORM_ICON: Record<string, string> = {
   instagram: "camera",
@@ -18,6 +19,7 @@ const DESIGN_STATUSES = ["DRAFT", "IN_DESIGN", "CREATIVE_UPLOADED", "REVISION_RE
 
 export default function DesignerPage() {
   const api = useApi();
+  const toast = useToast();
   const { checking } = useRoleGuard(["DESIGNER", "ADMIN"]);
 
   const [posts, setPosts] = useState<any[]>([]);
@@ -66,7 +68,7 @@ export default function DesignerPage() {
       const updated = await api.posts.get(postId);
       setPosts((prev) => prev.map((p) => (p.id === postId ? { ...p, ...updated, clientName: p.clientName } : p)));
     } catch (e: any) {
-      alert(e.message);
+      toast.error("Upload failed", e.message);
     } finally {
       setUploading(null);
       uploadTargetRef.current = null;

@@ -6,6 +6,7 @@ import { DashboardShell } from "@/components/layout/DashboardShell";
 import { Icon } from "@/components/ui/Icon";
 import { useApi } from "@/hooks/useApi";
 import { useRoleGuard } from "@/hooks/useRoleGuard";
+import { useToast } from "@/components/ui/Toast";
 
 const ROLES = ["ADMIN", "DESIGNER", "CLIENT"];
 
@@ -26,6 +27,7 @@ const PLATFORM_AUTH_KEY: Record<string, string> = {
 
 function SettingsInner() {
   const api = useApi();
+  const toast = useToast();
   const searchParams = useSearchParams();
   const { checking, user: me } = useRoleGuard(["ADMIN", "DESIGNER", "CLIENT"]);
 
@@ -111,7 +113,7 @@ function SettingsInner() {
       const updated = await api.users.updateRole(userId, role);
       setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, role: updated.role } : u)));
     } catch (e: any) {
-      alert(e.message);
+      toast.error("Error", e.message);
     } finally {
       setUpdatingRole(null);
     }
@@ -126,7 +128,7 @@ function SettingsInner() {
       const { url } = await api.socialAuth.connectUrl(authKey, selectedClientId);
       window.location.href = url;
     } catch (e: any) {
-      alert(e.message);
+      toast.error("Error", e.message);
       setConnectingPlatform(null);
     }
   }
@@ -138,7 +140,7 @@ function SettingsInner() {
       await api.socialAuth.disconnect(connectionId, selectedClientId);
       setConnections((prev) => prev.filter((c) => c.id !== connectionId));
     } catch (e: any) {
-      alert(e.message);
+      toast.error("Error", e.message);
     } finally {
       setDisconnecting(null);
     }

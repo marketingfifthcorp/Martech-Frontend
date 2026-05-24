@@ -6,6 +6,7 @@ import Link from "next/link";
 import { DashboardShell } from "@/components/layout/DashboardShell";
 import { Icon } from "@/components/ui/Icon";
 import { useApi } from "@/hooks/useApi";
+import { useToast } from "@/components/ui/Toast";
 
 const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
@@ -44,10 +45,13 @@ export default function ProjectDetailPage() {
   const router = useRouter();
   const api = useApi();
 
-  const [project, setProject] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const toast = useToast();
+
+  const [project,            setProject]            = useState<any>(null);
+  const [loading,            setLoading]            = useState(true);
   const [generatingCalendar, setGeneratingCalendar] = useState(false);
-  const [queueing, setQueueing] = useState(false);
+  const [queueing,           setQueueing]           = useState(false);
+  const [expandingCaption,   setExpandingCaption]   = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -70,7 +74,7 @@ export default function ProjectDetailPage() {
       const refreshed = await api.projects.get(id);
       setProject(refreshed);
     } catch (e: any) {
-      alert(e.message);
+      toast.error("Failed to generate calendar", e.message);
     } finally {
       setGeneratingCalendar(false);
     }
@@ -83,9 +87,25 @@ export default function ProjectDetailPage() {
       const refreshed = await api.projects.get(id);
       setProject(refreshed);
     } catch (e: any) {
-      alert(e.message);
+      toast.error("Failed to queue project", e.message);
     } finally {
       setQueueing(false);
+    }
+  }
+
+  async function handleExpandCaption(postId: string) {
+    setExpandingCaption(postId);
+    try {
+      const updated = await api.posts.expandCaption(postId);
+      setProject((prev: any) => ({
+        ...prev,
+        posts: prev.posts.map((p: any) => p.id === postId ? { ...p, ...updated } : p),
+      }));
+      toast.success("Caption generated");
+    } catch (e: any) {
+      toast.error("Failed to generate caption", e.message);
+    } finally {
+      setExpandingCaption(null);
     }
   }
 
@@ -266,13 +286,35 @@ export default function ProjectDetailPage() {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <Link
-                        href={`/post-review?postId=${post.id}`}
-                        className="opacity-0 group-hover:opacity-100 inline-flex items-center gap-1 text-primary text-[11px] font-bold uppercase tracking-widest hover:underline transition-opacity"
-                      >
-                        Review
-                        <Icon name="arrow_forward" className="text-sm" />
-                      </Link>
+                      <div className="flex items-center justify-end gap-3">
+                        {!post.caption && (
+                          <button
+                            onClick={() => handleExpandCaption(post.id)}
+                            disabled={expandingCaption === post.id}
+                            className="opacity-0 group-hover:opacity-100 inline-flex items-center gap-1 text-secondary text-[11px] font-bold uppercase tracking-widest hover:underline transition-opacity disabled:opacity-50"
+                          >
+                            {expandingCaption === post.id ? (
+                              <span className="w-3 h-3 border border-secondary/40 border-t-secondary rounded-full animate-spin" />
+                            ) : (
+                              <Icon name="auto_awesome" className="text-xs" />
+                            )}
+                            {expandingCaption === post.id ? "Generating…" : "Gen Caption"}
+                          </button>
+                        )}
+                        {post.caption && (
+                          <span className="opacity-0 group-hover:opacity-100 inline-flex items-center gap-1 text-emerald-600 text-[11px] font-bold uppercase tracking-widest transition-opacity">
+                            <Icon name="check_circle" className="text-xs" />
+                            Caption
+                          </span>
+                        )}
+                        <Link
+                          href={`/post-review?postId=${post.id}`}
+                          className="opacity-0 group-hover:opacity-100 inline-flex items-center gap-1 text-primary text-[11px] font-bold uppercase tracking-widest hover:underline transition-opacity"
+                        >
+                          Review
+                          <Icon name="arrow_forward" className="text-sm" />
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 ))}

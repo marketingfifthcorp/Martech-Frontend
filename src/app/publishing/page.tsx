@@ -5,6 +5,7 @@ import Link from "next/link";
 import { DashboardShell } from "@/components/layout/DashboardShell";
 import { Icon } from "@/components/ui/Icon";
 import { useApi } from "@/hooks/useApi";
+import { useToast } from "@/components/ui/Toast";
 
 const PLATFORM_ICON: Record<string, string> = {
   instagram: "photo_camera",
@@ -23,6 +24,7 @@ const STATUS_CLASSES: Record<string, string> = {
 
 export default function PublishingPage() {
   const api = useApi();
+  const toast = useToast();
 
   const [queue, setQueue] = useState<any[]>([]);
   const [log, setLog] = useState<any[]>([]);
@@ -57,7 +59,7 @@ export default function PublishingPage() {
       await api.publishing.publishPost(postId);
       await loadData();
     } catch (e: any) {
-      alert(e.message);
+      toast.error("Error", e.message);
     } finally {
       setPublishing(null);
     }
@@ -69,7 +71,7 @@ export default function PublishingPage() {
       await api.publishing.retryFailed(postId);
       await loadData();
     } catch (e: any) {
-      alert(e.message);
+      toast.error("Error", e.message);
     } finally {
       setRetrying(null);
     }

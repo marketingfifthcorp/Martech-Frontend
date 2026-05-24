@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Icon } from "@/components/ui/Icon";
 import { useApi } from "@/hooks/useApi";
+import { useToast } from "@/components/ui/Toast";
 
 const PLATFORM_ICON: Record<string, string> = {
   instagram: "camera",
@@ -17,6 +18,7 @@ function ApprovalsInner() {
   const searchParams = useSearchParams();
   const clientId = searchParams.get("clientId");
   const api = useApi();
+  const toast = useToast();
 
   const [posts, setPosts] = useState<any[]>([]);
   const [client, setClient] = useState<any>(null);
@@ -51,7 +53,7 @@ function ApprovalsInner() {
       await api.posts.approve(postId, action, "");
       await loadData();
     } catch (e: any) {
-      alert(e.message);
+      toast.error("Action failed", e.message);
     } finally {
       setApproving(null);
     }

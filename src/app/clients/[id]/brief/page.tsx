@@ -1,35 +1,41 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { DashboardShell } from "@/components/layout/DashboardShell";
 import { Icon } from "@/components/ui/Icon";
 import { useApi } from "@/hooks/useApi";
+import { useToast } from "@/components/ui/Toast";
 
 export default function BriefPage() {
   const { id: clientId } = useParams<{ id: string }>();
-  const router = useRouter();
-  const api = useApi();
-  const briefFileRef = useRef<HTMLInputElement>(null);
-  const brandAssetRef = useRef<HTMLInputElement>(null);
+  const router  = useRouter();
+  const api     = useApi();
+  const toast   = useToast();
+  const briefFileRef    = useRef<HTMLInputElement>(null);
+  const brandAssetRef   = useRef<HTMLInputElement>(null);
 
-  const [client, setClient] = useState<any>(null);
-  const [brief, setBrief] = useState<any>(null);
-  const [saving, setSaving] = useState(false);
+  const [client,    setClient]    = useState<any>(null);
+  const [brief,     setBrief]     = useState<any>(null);
+  const [saving,    setSaving]    = useState(false);
   const [uploading, setUploading] = useState<string | null>(null);
 
+  // Drag state per drop zone
+  const [draggingBrief, setDraggingBrief] = useState(false);
+  const [draggingBrand, setDraggingBrand] = useState(false);
+
   const [form, setForm] = useState({
-    websiteUrl: "",
-    socialLinks: "",
-    referenceUrls: "",
-    campaignGoals: "",
-    targetAudience: "",
+    websiteUrl:      "",
+    socialLinks:     "",
+    referenceUrls:   "",
+    campaignGoals:   "",
+    targetAudience:  "",
     competitorNotes: "",
-    toneOfVoice: "",
-    sector: "",
-    budgetRange: "",
-    adminNotes: "",
+    toneOfVoice:     "",
+    sector:          "",
+    budgetRange:     "",
+    adminNotes:      "",
   });
 
   useEffect(() => {
@@ -44,94 +50,142 @@ export default function BriefPage() {
           const b = briefs[0];
           setBrief(b);
           setForm({
-            websiteUrl: b.websiteUrl || "",
-            socialLinks: (b.socialLinks || []).join("\n"),
-            referenceUrls: (b.referenceUrls || []).join("\n"),
-            campaignGoals: b.campaignGoals || "",
-            targetAudience: b.targetAudience || "",
+            websiteUrl:      b.websiteUrl      || "",
+            socialLinks:     (b.socialLinks    || []).join("\n"),
+            referenceUrls:   (b.referenceUrls  || []).join("\n"),
+            campaignGoals:   b.campaignGoals   || "",
+            targetAudience:  b.targetAudience  || "",
             competitorNotes: b.competitorNotes || "",
-            toneOfVoice: b.toneOfVoice || "",
-            sector: b.sector || "",
-            budgetRange: b.budgetRange || "",
-            adminNotes: b.adminNotes || "",
+            toneOfVoice:     b.toneOfVoice     || "",
+            sector:          b.sector          || "",
+            budgetRange:     b.budgetRange     || "",
+            adminNotes:      b.adminNotes      || "",
           });
         }
       } catch (e) {
         console.error(e);
+        toast.error("Failed to load brief", "Please refresh the page.");
       }
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId]);
 
-  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-    setForm((f) => ({ ...f, [k]: e.target.value }));
+  const set = (k: string) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+      setForm((f) => ({ ...f, [k]: e.target.value }));
 
+  // ── Ensure brief exists before uploading ──────────────────
+  async function ensureBrief(): Promise<any> {
+    if (brief) return brief;
+    const payload = {
+      clientId,
+      websiteUrl:      form.websiteUrl      || undefined,
+      socialLinks:     form.socialLinks ? form.socialLinks.split("\n").filter(Boolean) : [],
+      referenceUrls:   form.referenceUrls ? form.referenceUrls.split("\n").filter(Boolean) : [],
+      campaignGoals:   form.campaignGoals   || undefined,
+      targetAudience:  form.targetAudience  || undefined,
+      competitorNotes: form.competitorNotes || undefined,
+      toneOfVoice:     form.toneOfVoice     || undefined,
+      sector:          form.sector          || undefined,
+      budgetRange:     form.budgetRange     || undefined,
+      adminNotes:      form.adminNotes      || undefined,
+    };
+    const created = await api.briefs.create(payload);
+    setBrief(created);
+    return created;
+  }
+
+  // ── Save brief form ───────────────────────────────────────
   async function handleSave() {
     setSaving(true);
     try {
       const payload = {
         clientId,
-        websiteUrl: form.websiteUrl || undefined,
-        socialLinks: form.socialLinks ? form.socialLinks.split("\n").filter(Boolean) : [],
-        referenceUrls: form.referenceUrls ? form.referenceUrls.split("\n").filter(Boolean) : [],
-        campaignGoals: form.campaignGoals || undefined,
-        targetAudience: form.targetAudience || undefined,
+        websiteUrl:      form.websiteUrl      || undefined,
+        socialLinks:     form.socialLinks ? form.socialLinks.split("\n").filter(Boolean) : [],
+        referenceUrls:   form.referenceUrls ? form.referenceUrls.split("\n").filter(Boolean) : [],
+        campaignGoals:   form.campaignGoals   || undefined,
+        targetAudience:  form.targetAudience  || undefined,
         competitorNotes: form.competitorNotes || undefined,
-        toneOfVoice: form.toneOfVoice || undefined,
-        sector: form.sector || undefined,
-        budgetRange: form.budgetRange || undefined,
-        adminNotes: form.adminNotes || undefined,
+        toneOfVoice:     form.toneOfVoice     || undefined,
+        sector:          form.sector          || undefined,
+        budgetRange:     form.budgetRange     || undefined,
+        adminNotes:      form.adminNotes      || undefined,
       };
-
       if (brief) {
         const updated = await api.briefs.update(brief.id, payload);
         setBrief(updated);
+        toast.success("Brief updated");
       } else {
         const created = await api.briefs.create(payload);
         setBrief(created);
+        toast.success("Brief saved", "You can now upload files.");
       }
-
       router.push(`/clients/${clientId}`);
     } catch (e: any) {
-      alert(e.message);
+      toast.error("Failed to save brief", e.message);
     } finally {
       setSaving(false);
     }
   }
 
-  async function handleBriefFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file || !brief) return;
-    setUploading("brief");
+  // ── File upload handler ───────────────────────────────────
+  async function uploadFile(type: "brief" | "brand", file: File) {
+    setUploading(type);
     try {
-      await api.briefs.uploadBrief(brief.id, file);
-      const updated = await api.briefs.get(brief.id);
+      const currentBrief = await ensureBrief();
+      if (type === "brief") {
+        await api.briefs.uploadBrief(currentBrief.id, file);
+      } else {
+        await api.briefs.uploadBrandAsset(currentBrief.id, file);
+      }
+      const updated = await api.briefs.get(currentBrief.id);
       setBrief(updated);
+      toast.success(
+        type === "brief" ? "Brief document uploaded" : "Brand asset uploaded",
+        file.name,
+      );
     } catch (err: any) {
-      alert(err.message);
+      toast.error("Upload failed", err.message);
     } finally {
       setUploading(null);
     }
   }
 
-  async function handleBrandAssetUpload(e: React.ChangeEvent<HTMLInputElement>) {
+  // ── Input file change ─────────────────────────────────────
+  function handleBriefFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (!file || !brief) return;
-    setUploading("brand");
-    try {
-      await api.briefs.uploadBrandAsset(brief.id, file);
-      const updated = await api.briefs.get(brief.id);
-      setBrief(updated);
-    } catch (err: any) {
-      alert(err.message);
-    } finally {
-      setUploading(null);
-    }
+    if (file) uploadFile("brief", file);
+    e.target.value = "";
+  }
+
+  function handleBrandFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file) uploadFile("brand", file);
+    e.target.value = "";
+  }
+
+  // ── Drag & drop helpers ───────────────────────────────────
+  function onDragOver(e: React.DragEvent, setter: (v: boolean) => void) {
+    e.preventDefault();
+    setter(true);
+  }
+  function onDragLeave(setter: (v: boolean) => void) {
+    setter(false);
+  }
+  function onDrop(e: React.DragEvent, type: "brief" | "brand", setter: (v: boolean) => void) {
+    e.preventDefault();
+    setter(false);
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+    uploadFile(type, file);
   }
 
   return (
     <DashboardShell contextLabel={client?.name || "Brief"}>
       <div className="p-8 md:p-12 max-w-4xl mx-auto">
+
+        {/* Breadcrumb */}
         <div className="flex items-center gap-2 text-xs text-on-surface-variant mb-8">
           <Link href="/dashboard" className="hover:text-primary">Dashboard</Link>
           <Icon name="chevron_right" className="text-xs" />
@@ -145,77 +199,124 @@ export default function BriefPage() {
             {brief ? "Update" : "Upload"} Client Brief
           </h1>
           <p className="text-on-surface-variant mt-2">
-            Fill in the inputs needed for the AI strategy agent to run your methodology.
+            Fill in the inputs for the AI strategy agent. Files can be dragged &amp; dropped directly.
           </p>
         </div>
 
         <div className="space-y-8">
-          {/* File uploads */}
+          {/* ── File uploads ── */}
           <div className="bg-surface-container-lowest rounded-2xl p-8 border border-outline-variant/10">
-            <h3 className="font-headline font-bold mb-6">Files & Assets</h3>
+            <h3 className="font-headline font-bold mb-1">Files &amp; Assets</h3>
+            <p className="text-xs text-on-surface-variant mb-6">
+              Drag &amp; drop files directly — the brief record will be created automatically if needed.
+            </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+              {/* Brief document drop zone */}
               <div>
                 <label className="text-[11px] uppercase tracking-widest font-semibold text-on-surface-variant block mb-3">
                   Brief Document
                 </label>
                 {brief?.briefFileName && (
-                  <div className="flex items-center gap-2 text-sm text-on-surface mb-3">
+                  <div className="flex items-center gap-2 text-sm text-on-surface mb-3 p-3 bg-surface-container rounded-lg">
                     <Icon name="description" className="text-primary" />
-                    <span>{brief.briefFileName}</span>
+                    <span className="truncate">{brief.briefFileName}</span>
+                    <Icon name="check_circle" className="text-emerald-500 ml-auto shrink-0" />
                   </div>
                 )}
-                <button
+                <div
+                  onDragOver={(e) => onDragOver(e, setDraggingBrief)}
+                  onDragLeave={() => onDragLeave(setDraggingBrief)}
+                  onDrop={(e) => onDrop(e, "brief", setDraggingBrief)}
                   onClick={() => briefFileRef.current?.click()}
-                  disabled={!brief || uploading === "brief"}
-                  className="w-full border-2 border-dashed border-outline-variant/40 rounded-xl p-6 text-center hover:border-primary/40 hover:bg-primary/5 transition-all disabled:opacity-50"
+                  className={`w-full border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all select-none ${
+                    draggingBrief
+                      ? "border-primary bg-primary/8 scale-[1.01]"
+                      : "border-outline-variant/40 hover:border-primary/50 hover:bg-primary/5"
+                  }`}
                 >
                   {uploading === "brief" ? (
-                    <span className="text-xs text-on-surface-variant">Uploading...</span>
+                    <div className="flex flex-col items-center gap-2">
+                      <span className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                      <p className="text-xs text-on-surface-variant">Uploading…</p>
+                    </div>
                   ) : (
                     <>
-                      <Icon name="upload" className="text-2xl text-on-surface-variant/50 mb-2" />
-                      <p className="text-xs text-on-surface-variant">{brief ? "Replace brief file" : "Save first, then upload"}</p>
+                      <Icon name={draggingBrief ? "file_download" : "upload"} className="text-3xl text-on-surface-variant/40 mb-2" />
+                      <p className="text-sm font-semibold text-on-surface-variant">
+                        {draggingBrief ? "Drop to upload" : "Drop file or click"}
+                      </p>
+                      <p className="text-xs text-on-surface-variant/50 mt-1">PDF, DOC, DOCX, TXT</p>
                     </>
                   )}
-                </button>
-                <input ref={briefFileRef} type="file" accept=".pdf,.doc,.docx,.txt" hidden onChange={handleBriefFileUpload} />
+                </div>
+                <input
+                  ref={briefFileRef}
+                  type="file"
+                  accept=".pdf,.doc,.docx,.txt"
+                  hidden
+                  onChange={handleBriefFileChange}
+                />
               </div>
 
+              {/* Brand assets drop zone */}
               <div>
                 <label className="text-[11px] uppercase tracking-widest font-semibold text-on-surface-variant block mb-3">
                   Brand Assets
                 </label>
                 {brief?.brandAssets?.length > 0 && (
-                  <p className="text-xs text-on-surface-variant mb-3">{brief.brandAssets.length} file(s) uploaded</p>
+                  <div className="flex items-center gap-2 text-sm text-on-surface mb-3 p-3 bg-surface-container rounded-lg">
+                    <Icon name="folder_zip" className="text-primary" />
+                    <span>{brief.brandAssets.length} file{brief.brandAssets.length !== 1 ? "s" : ""} uploaded</span>
+                    <Icon name="check_circle" className="text-emerald-500 ml-auto shrink-0" />
+                  </div>
                 )}
-                <button
+                <div
+                  onDragOver={(e) => onDragOver(e, setDraggingBrand)}
+                  onDragLeave={() => onDragLeave(setDraggingBrand)}
+                  onDrop={(e) => onDrop(e, "brand", setDraggingBrand)}
                   onClick={() => brandAssetRef.current?.click()}
-                  disabled={!brief || uploading === "brand"}
-                  className="w-full border-2 border-dashed border-outline-variant/40 rounded-xl p-6 text-center hover:border-primary/40 hover:bg-primary/5 transition-all disabled:opacity-50"
+                  className={`w-full border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all select-none ${
+                    draggingBrand
+                      ? "border-primary bg-primary/8 scale-[1.01]"
+                      : "border-outline-variant/40 hover:border-primary/50 hover:bg-primary/5"
+                  }`}
                 >
                   {uploading === "brand" ? (
-                    <span className="text-xs text-on-surface-variant">Uploading...</span>
+                    <div className="flex flex-col items-center gap-2">
+                      <span className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                      <p className="text-xs text-on-surface-variant">Uploading…</p>
+                    </div>
                   ) : (
                     <>
-                      <Icon name="image" className="text-2xl text-on-surface-variant/50 mb-2" />
-                      <p className="text-xs text-on-surface-variant">{brief ? "Add brand asset" : "Save first, then upload"}</p>
+                      <Icon name={draggingBrand ? "file_download" : "image"} className="text-3xl text-on-surface-variant/40 mb-2" />
+                      <p className="text-sm font-semibold text-on-surface-variant">
+                        {draggingBrand ? "Drop to upload" : "Drop file or click"}
+                      </p>
+                      <p className="text-xs text-on-surface-variant/50 mt-1">Images, PDF, ZIP</p>
                     </>
                   )}
-                </button>
-                <input ref={brandAssetRef} type="file" accept="image/*,.pdf,.zip" hidden onChange={handleBrandAssetUpload} />
+                </div>
+                <input
+                  ref={brandAssetRef}
+                  type="file"
+                  accept="image/*,.pdf,.zip"
+                  hidden
+                  onChange={handleBrandFileChange}
+                />
               </div>
             </div>
           </div>
 
-          {/* URLs */}
+          {/* ── URLs ── */}
           <div className="bg-surface-container-lowest rounded-2xl p-8 border border-outline-variant/10 space-y-5">
-            <h3 className="font-headline font-bold mb-2">URLs & Links</h3>
+            <h3 className="font-headline font-bold mb-2">URLs &amp; Links</h3>
             <Field label="Website URL" value={form.websiteUrl} onChange={set("websiteUrl")} placeholder="https://client.com" />
             <TextareaField label="Social Media Links (one per line)" value={form.socialLinks} onChange={set("socialLinks")} placeholder="https://instagram.com/brand" rows={3} />
             <TextareaField label="Reference / Inspiration URLs (one per line)" value={form.referenceUrls} onChange={set("referenceUrls")} placeholder="https://competitor.com" rows={3} />
           </div>
 
-          {/* Strategy Inputs */}
+          {/* ── Strategy Inputs ── */}
           <div className="bg-surface-container-lowest rounded-2xl p-8 border border-outline-variant/10 space-y-5">
             <h3 className="font-headline font-bold mb-2">Strategy Inputs</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -228,7 +329,7 @@ export default function BriefPage() {
             <TextareaField label="Tone of Voice" value={form.toneOfVoice} onChange={set("toneOfVoice")} placeholder="Authoritative but approachable. Editorial. Never salesy..." rows={2} />
           </div>
 
-          {/* Internal Notes */}
+          {/* ── Internal Notes ── */}
           <div className="bg-surface-container-lowest rounded-2xl p-8 border border-outline-variant/10">
             <TextareaField label="Internal Admin Notes" value={form.adminNotes} onChange={set("adminNotes")} placeholder="Notes for internal team only. Not shared with client." rows={3} />
           </div>
@@ -245,7 +346,7 @@ export default function BriefPage() {
             className="flex items-center gap-2 px-8 py-4 bg-gradient-to-br from-primary to-primary-container text-white font-headline font-bold text-sm rounded-md shadow-lg hover:opacity-90 active:scale-[0.99] transition-all disabled:opacity-60"
           >
             {saving ? (
-              <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Saving...</>
+              <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Saving…</>
             ) : (
               <><Icon name="save" className="text-sm" /> {brief ? "Update Brief" : "Save Brief"}</>
             )}
@@ -256,6 +357,7 @@ export default function BriefPage() {
   );
 }
 
+// ── Field components ──────────────────────────────────────────
 function Field({ label, value, onChange, placeholder }: {
   label: string; value: string;
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -263,9 +365,7 @@ function Field({ label, value, onChange, placeholder }: {
 }) {
   return (
     <div>
-      <label className="text-[11px] uppercase tracking-widest font-semibold text-on-surface-variant block mb-2">
-        {label}
-      </label>
+      <label className="text-[11px] uppercase tracking-widest font-semibold text-on-surface-variant block mb-2">{label}</label>
       <input
         type="text"
         value={value}
@@ -284,9 +384,7 @@ function TextareaField({ label, value, onChange, placeholder, rows = 3 }: {
 }) {
   return (
     <div>
-      <label className="text-[11px] uppercase tracking-widest font-semibold text-on-surface-variant block mb-2">
-        {label}
-      </label>
+      <label className="text-[11px] uppercase tracking-widest font-semibold text-on-surface-variant block mb-2">{label}</label>
       <textarea
         value={value}
         onChange={onChange}

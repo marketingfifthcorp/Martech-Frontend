@@ -107,6 +107,8 @@ export const strategyApi = {
     apiFetch<any>(`/strategy/${id}`, { method: "PUT", body: data, token }),
   sendToClient: (id: string, token: string) =>
     apiFetch<any>(`/strategy/${id}/send`, { method: "POST", token }),
+  resend: (id: string, token: string) =>
+    apiFetch<any>(`/strategy/${id}/resend`, { method: "POST", token }),
   approve: (id: string, action: "APPROVED" | "CHANGES_REQUESTED", comment: string, token: string) =>
     apiFetch<any>(`/strategy/${id}/approve`, { method: "POST", body: { action, comment }, token }),
 };
@@ -135,6 +137,12 @@ export const postsApi = {
     apiFetch<any>(`/posts/${id}`, { method: "PUT", body: data, token }),
   approve: (id: string, action: "APPROVED" | "CHANGES_REQUESTED", comment: string, token: string) =>
     apiFetch<any>(`/posts/${id}/approve`, { method: "POST", body: { action, comment }, token }),
+  expandCaption: (id: string, token: string) =>
+    apiFetch<any>(`/posts/${id}/expand-caption`, { method: "POST", token }),
+  improveField: (id: string, field: string, instruction: string, token: string) =>
+    apiFetch<{ suggestion: string | string[] }>(`/posts/${id}/improve-field`, {
+      method: "POST", body: { field, instruction }, token,
+    }),
 };
 
 export const assetsApi = {
