@@ -214,7 +214,7 @@ export default function BriefPage() {
                 </label>
                 {brief?.briefFileName && (
                   <div className="flex items-center gap-2 text-sm mb-3 p-3 rounded-lg" style={{ color: "var(--t2)", background: "var(--in)", border: "1px solid var(--in-b)" }}>
-                    <Icon name="description" style={{ color: "var(--green)" }} />
+                    <span style={{ color: "var(--green)", lineHeight: 1 }}><Icon name="description" /></span>
                     <span className="truncate">{brief.briefFileName}</span>
                     <Icon name="check_circle" className="text-emerald-500 ml-auto shrink-0" />
                   </div>
@@ -237,7 +237,7 @@ export default function BriefPage() {
                     </div>
                   ) : (
                     <>
-                      <Icon name={draggingBrief ? "file_download" : "upload"} className="text-3xl mb-2" style={{ color: "var(--t4)" }} />
+                      <span style={{ color: "var(--t4)", lineHeight: 1 }}><Icon name={draggingBrief ? "file_download" : "upload"} className="text-3xl mb-2" /></span>
                       <p className="text-sm font-light" style={{ color: "var(--t2)" }}>
                         {draggingBrief ? "Drop to upload" : "Drop file or click"}
                       </p>
@@ -261,7 +261,7 @@ export default function BriefPage() {
                 </label>
                 {brief?.brandAssets?.length > 0 && (
                   <div className="flex items-center gap-2 text-sm mb-3 p-3 rounded-lg" style={{ color: "var(--t2)", background: "var(--in)", border: "1px solid var(--in-b)" }}>
-                    <Icon name="folder_zip" style={{ color: "var(--green)" }} />
+                    <span style={{ color: "var(--green)", lineHeight: 1 }}><Icon name="folder_zip" /></span>
                     <span>{brief.brandAssets.length} file{brief.brandAssets.length !== 1 ? "s" : ""} uploaded</span>
                     <Icon name="check_circle" className="text-emerald-500 ml-auto shrink-0" />
                   </div>
@@ -284,7 +284,7 @@ export default function BriefPage() {
                     </div>
                   ) : (
                     <>
-                      <Icon name={draggingBrand ? "file_download" : "image"} className="text-3xl mb-2" style={{ color: "var(--t4)" }} />
+                      <span style={{ color: "var(--t4)", lineHeight: 1 }}><Icon name={draggingBrand ? "file_download" : "image"} className="text-3xl mb-2" /></span>
                       <p className="text-sm font-light" style={{ color: "var(--t2)" }}>
                         {draggingBrand ? "Drop to upload" : "Drop file or click"}
                       </p>
