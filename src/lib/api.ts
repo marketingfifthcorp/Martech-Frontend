@@ -3,7 +3,8 @@
  * Tokens are always passed explicitly (from useApi hook or server auth).
  */
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api/v1";
+// Relative path → proxied through Next.js rewrites → no CORS issues
+const BASE_URL = "/api/v1";
 
 type RequestOptions = {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
@@ -40,11 +41,12 @@ export async function apiFetch<T = unknown>(
 
   if (!res.ok) {
     const errorText = await res.text();
-    let message = `API error ${res.status}`;
+    let message = `API ${res.status} ${path}`;
     try {
       const json = JSON.parse(errorText);
       message = json.message || message;
     } catch {}
+    console.error(`[API] ${method} ${path} → ${res.status}`, message);
     throw new Error(message);
   }
 

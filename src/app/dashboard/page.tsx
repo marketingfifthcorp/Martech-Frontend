@@ -3,47 +3,52 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { DashboardShell } from "@/components/layout/DashboardShell";
-import { Icon } from "@/components/ui/Icon";
 import { useApi } from "@/hooks/useApi";
 import { useRoleGuard } from "@/hooks/useRoleGuard";
 
-type ClientStatus =
-  | "ONBOARDING" | "BRIEF_UPLOADED" | "STRATEGY_PENDING" | "STRATEGY_IN_REVIEW"
-  | "STRATEGY_SENT" | "STRATEGY_APPROVED" | "CALENDAR_PENDING" | "ACTIVE" | "PAUSED" | "ARCHIVED";
-
-const STATUS_MAP: Record<ClientStatus, { label: string; tone: "primary" | "secondary" | "success" }> = {
-  ONBOARDING: { label: "Onboarding", tone: "secondary" },
-  BRIEF_UPLOADED: { label: "Brief Ready", tone: "secondary" },
-  STRATEGY_PENDING: { label: "Generating Strategy", tone: "secondary" },
-  STRATEGY_IN_REVIEW: { label: "Strategy Review", tone: "primary" },
-  STRATEGY_SENT: { label: "Awaiting Approval", tone: "primary" },
-  STRATEGY_APPROVED: { label: "Strategy Approved", tone: "success" },
-  CALENDAR_PENDING: { label: "Calendar Pending", tone: "primary" },
-  ACTIVE: { label: "Active", tone: "success" },
-  PAUSED: { label: "Paused", tone: "secondary" },
-  ARCHIVED: { label: "Archived", tone: "secondary" },
+const STAGE_LABEL: Record<string, string> = {
+  ONBOARDING: "Onboarding",
+  BRIEF_UPLOADED: "Brief ready",
+  STRATEGY_PENDING: "Strategy generating",
+  STRATEGY_IN_REVIEW: "Strategy review",
+  STRATEGY_SENT: "Awaiting approval",
+  STRATEGY_APPROVED: "Strategy approved",
+  CALENDAR_PENDING: "Calendar pending",
+  ACTIVE: "Publishing live",
+  PAUSED: "Paused",
+  ARCHIVED: "Archived",
 };
 
-const BADGE_CLASSES = {
-  primary: "bg-primary/10 text-primary",
-  secondary: "bg-secondary/10 text-secondary",
-  success: "bg-emerald-100 text-emerald-700",
+const STAGE_CLASS: Record<string, string> = {
+  ACTIVE: "plg",
+  STRATEGY_APPROVED: "plg",
+  STRATEGY_IN_REVIEW: "plb",
+  STRATEGY_SENT: "plb",
+  ONBOARDING: "plb",
+  BRIEF_UPLOADED: "pla",
+  STRATEGY_PENDING: "pla",
+  CALENDAR_PENDING: "pla",
+  PAUSED: "plr",
+  ARCHIVED: "plr",
 };
 
-const STAGE_MAP: Record<ClientStatus, number> = {
-  ONBOARDING: 0,
-  BRIEF_UPLOADED: 1,
-  STRATEGY_PENDING: 1,
-  STRATEGY_IN_REVIEW: 2,
-  STRATEGY_SENT: 2,
-  STRATEGY_APPROVED: 3,
-  CALENDAR_PENDING: 3,
-  ACTIVE: 4,
-  PAUSED: 4,
-  ARCHIVED: 4,
+const STAGE_PROGRESS: Record<string, number> = {
+  ONBOARDING: 5, BRIEF_UPLOADED: 15, STRATEGY_PENDING: 25,
+  STRATEGY_IN_REVIEW: 35, STRATEGY_SENT: 45, STRATEGY_APPROVED: 55,
+  CALENDAR_PENDING: 65, ACTIVE: 90, PAUSED: 80, ARCHIVED: 100,
 };
 
-const PIPELINE_STAGES = ["Brief", "Strategy", "Calendar", "Design", "Live"];
+const CLIENT_COLORS = [
+  { bg: "var(--pb)", color: "var(--purple)", border: "var(--pbb)" },
+  { bg: "var(--gb)", color: "var(--green)", border: "var(--gbb)" },
+  { bg: "var(--bb)", color: "var(--blue)", border: "var(--bbb)" },
+  { bg: "var(--ab)", color: "var(--amber)", border: "var(--abb)" },
+  { bg: "var(--rb)", color: "var(--red)", border: "var(--rbb)" },
+];
+
+function getInitials(name: string) {
+  return name.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
+}
 
 export default function DashboardPage() {
   const api = useApi();
@@ -62,149 +67,169 @@ export default function DashboardPage() {
         ]);
         setClients(clientData);
         setStats(statsData);
-      } catch (e) {
-        console.error("Failed to load dashboard:", e);
-      } finally {
-        setLoading(false);
-      }
+      } catch {}
+      finally { setLoading(false); }
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [checking]);
 
-  if (checking) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-surface">
-        <div className="w-8 h-8 border-2 border-primary/20 border-t-primary rounded-full animate-spin" />
-      </div>
-    );
-  }
+  if (checking) return (
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#0f0f1a" }}>
+      <div style={{ width: 32, height: 32, border: "2px solid rgba(52,217,123,.2)", borderTopColor: "#34d97b", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
+    </div>
+  );
 
   return (
-    <DashboardShell contextLabel="Agency Overview">
-      <div className="p-8 md:p-12 max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6">
-          <div>
-            <span className="text-[11px] uppercase tracking-[0.3em] text-primary font-semibold mb-2 block">
-              Admin Dashboard
-            </span>
-            <h1 className="text-4xl font-headline font-extrabold tracking-tight text-on-surface">
-              Client Portfolio
-            </h1>
+    <DashboardShell
+      title="Dashboard"
+      actionButton={
+        <Link href="/onboarding" className="gb gbp">
+          <i className="ti ti-plus" /> New client
+        </Link>
+      }
+    >
+      <div style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
+        <div className="sa">
+          {/* Metrics */}
+          <div className="g4" style={{ marginBottom: 16 }}>
+            <div className="mt"><div className="ml">Active clients</div><div className="mv">{loading ? "—" : stats.active}</div><div className="ms">{loading ? "" : `${stats.onboarding} onboarding`}</div></div>
+            <div className="mt"><div className="ml">Posts this month</div><div className="mv" style={{ color: "var(--green)" }}>148</div><div className="ms">92 published · 56 pending</div></div>
+            <div className="mt"><div className="ml">Awaiting approval</div><div className="mv" style={{ color: "var(--amber)" }}>{loading ? "—" : stats.pendingApproval}</div><div className="ms">Strategy & creative</div></div>
+            <div className="mt"><div className="ml">Publishing today</div><div className="mv" style={{ color: "var(--blue)" }}>14</div><div className="ms">Across all clients</div></div>
           </div>
-          <Link
-            href="/onboarding"
-            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-br from-primary to-primary-container text-white rounded-md font-headline font-bold text-sm shadow-lg hover:opacity-90 transition-all"
-          >
-            <Icon name="add" className="text-lg" />
-            Onboard New Client
-          </Link>
-        </div>
 
-        {/* Stats row */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-12">
-          {[
-            { label: "Total Clients", value: stats.total, icon: "group" },
-            { label: "Active", value: stats.active, icon: "check_circle" },
-            { label: "Onboarding", value: stats.onboarding, icon: "person_add" },
-            { label: "Pending Approval", value: stats.pendingApproval, icon: "pending_actions" },
-          ].map((s) => (
-            <div key={s.label} className="bg-surface-container-lowest rounded-xl p-6 shadow-sm border border-outline-variant/10">
-              <div className="flex items-center gap-2 mb-3">
-                <Icon name={s.icon} className="text-primary text-lg" />
-                <span className="text-[10px] uppercase tracking-widest text-on-surface-variant font-semibold">
-                  {s.label}
-                </span>
+          <div className="g2">
+            {/* Client pipeline table */}
+            <div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                <div className="slb">Client pipeline</div>
+                <Link href="/clients" style={{ padding: "3px 10px", fontSize: 10, borderRadius: 20, background: "var(--gb)", border: "1px solid var(--gbb)", color: "var(--green)", cursor: "pointer", fontWeight: 300, textDecoration: "none" }}>View all</Link>
               </div>
-              <span className="text-3xl font-headline font-bold text-on-surface">
-                {loading ? "—" : s.value}
-              </span>
+              <div className="cd" style={{ padding: 0, overflow: "hidden", marginBottom: 10 }}>
+                <table className="tbl">
+                  <thead>
+                    <tr>
+                      <th>Client</th>
+                      <th>Stage</th>
+                      <th>Progress</th>
+                      <th>Channels</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {loading ? (
+                      [1, 2, 3].map((i) => (
+                        <tr key={i}>
+                          <td colSpan={5}><div style={{ height: 28, background: "var(--in)", borderRadius: 6, animation: "pulse 1.5s ease infinite" }} /></td>
+                        </tr>
+                      ))
+                    ) : clients.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} style={{ textAlign: "center", padding: "28px 12px", color: "var(--t4)" }}>
+                          <i className="ti ti-users" style={{ fontSize: 24, display: "block", marginBottom: 8 }} />
+                          No clients yet — <Link href="/onboarding" style={{ color: "var(--green)" }}>onboard your first</Link>
+                        </td>
+                      </tr>
+                    ) : clients.slice(0, 5).map((client, idx) => {
+                      const color = CLIENT_COLORS[idx % CLIENT_COLORS.length];
+                      const cls = STAGE_CLASS[client.status] ?? "plb";
+                      const pct = STAGE_PROGRESS[client.status] ?? 0;
+                      return (
+                        <tr key={client.id} style={{ cursor: "pointer" }} onClick={() => window.location.href = `/clients/${client.id}`}>
+                          <td>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <div className="ci" style={{ width: 28, height: 28, background: color.bg, color: color.color, border: `1px solid ${color.border}` }}>
+                                {getInitials(client.name)}
+                              </div>
+                              <div>
+                                <div style={{ fontSize: 12, fontWeight: 300, color: "var(--t1)" }}>{client.name}</div>
+                                <div style={{ fontSize: 9, color: "var(--t4)" }}>{client.industry ?? "—"} · {client.postingFrequency ?? 12}/mo</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td><span className={`pl ${cls}`}>{STAGE_LABEL[client.status] ?? client.status}</span></td>
+                          <td>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                              <div className="pbw" style={{ width: 72 }}><div className="pbf" style={{ width: `${pct}%` }} /></div>
+                              <div style={{ fontSize: 9, color: "var(--t4)" }}>{pct}%</div>
+                            </div>
+                          </td>
+                          <td>
+                            <div className="pi">
+                              {(client.platforms ?? []).slice(0, 3).map((p: string) => (
+                                <div key={p} className="pci">{p.slice(0, 2)}</div>
+                              ))}
+                            </div>
+                          </td>
+                          <td>
+                            <Link href={`/clients/${client.id}`} className="gb gbs" onClick={(e) => e.stopPropagation()}>Open</Link>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          ))}
+
+            {/* Right column: action needed + activity */}
+            <div>
+              <div className="slb" style={{ marginBottom: 8 }}>Action needed</div>
+              <div className="cd" style={{ marginBottom: 10 }}>
+                {clients.filter((c) => ["STRATEGY_IN_REVIEW", "STRATEGY_SENT"].includes(c.status)).slice(0, 3).map((client) => (
+                  <div key={client.id} className="ari">
+                    <div>
+                      <div className="arn">{client.name}</div>
+                      <div className="ars">Strategy ready for review</div>
+                    </div>
+                    <Link href={`/clients/${client.id}`} className="gb gbs gbbl">Review</Link>
+                  </div>
+                ))}
+                {clients.filter((c) => c.status === "CALENDAR_PENDING").slice(0, 2).map((client) => (
+                  <div key={client.id} className="ari">
+                    <div>
+                      <div className="arn">{client.name}</div>
+                      <div className="ars">Calendar awaiting generation</div>
+                    </div>
+                    <Link href={`/clients/${client.id}`} className="gb gbs gbp">Generate</Link>
+                  </div>
+                ))}
+                {clients.filter((c) => ["STRATEGY_IN_REVIEW", "STRATEGY_SENT", "CALENDAR_PENDING"].includes(c.status)).length === 0 && (
+                  <div style={{ padding: "14px 0", textAlign: "center", fontSize: 11, color: "var(--t4)" }}>
+                    <i className="ti ti-check" style={{ fontSize: 20, display: "block", marginBottom: 6, color: "var(--green)" }} />
+                    No actions needed
+                  </div>
+                )}
+              </div>
+
+              <div className="slb" style={{ marginBottom: 8 }}>Recent activity</div>
+              <div className="cd">
+                <div className="ait">
+                  <div className="adot" style={{ background: "var(--green)" }} />
+                  <div className="atx">Bloom DTC · 3 posts published to Instagram &amp; TikTok</div>
+                  <div className="atm">2 min</div>
+                </div>
+                <div className="ait">
+                  <div className="adot" style={{ background: "var(--amber)" }} />
+                  <div className="atx">Kove Retail · Designer uploaded 3 new creatives</div>
+                  <div className="atm">18 min</div>
+                </div>
+                <div className="ait">
+                  <div className="adot" style={{ background: "var(--blue)" }} />
+                  <div className="atx">Orbit Finance · Strategy draft generated by AI</div>
+                  <div className="atm">1 hr</div>
+                </div>
+                <div className="ait">
+                  <div className="adot" style={{ background: "var(--t4)" }} />
+                  <div className="atx">Aura Wellness · Calendar approved by client</div>
+                  <div className="atm">3 hr</div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-
-        {/* Client cards */}
-        {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="bg-surface-container-lowest rounded-2xl p-6 animate-pulse h-48" />
-            ))}
-          </div>
-        ) : clients.length === 0 ? (
-          <div className="text-center py-24">
-            <Icon name="group_add" className="text-5xl text-on-surface-variant/30 mb-4" />
-            <h3 className="text-2xl font-headline font-bold text-on-surface-variant/50">
-              No clients yet
-            </h3>
-            <p className="text-on-surface-variant/40 mt-2 mb-6">
-              Onboard your first client to get started
-            </p>
-            <Link
-              href="/onboarding"
-              className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-md font-bold text-sm"
-            >
-              <Icon name="add" />
-              Onboard Client
-            </Link>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {clients.map((client) => {
-              const statusInfo = STATUS_MAP[client.status as ClientStatus] ?? { label: client.status, tone: "secondary" };
-              const stage = STAGE_MAP[client.status as ClientStatus] ?? 0;
-
-              return (
-                <Link
-                  key={client.id}
-                  href={`/clients/${client.id}`}
-                  className="bg-surface-container-lowest rounded-2xl p-6 shadow-sm border border-outline-variant/10 hover:shadow-md hover:-translate-y-0.5 transition-all group"
-                >
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary font-headline font-bold text-lg">
-                      {client.name.charAt(0)}
-                    </div>
-                    <span className={`text-[10px] uppercase tracking-widest font-bold px-3 py-1 rounded-full ${BADGE_CLASSES[statusInfo.tone]}`}>
-                      {statusInfo.label}
-                    </span>
-                  </div>
-
-                  <h3 className="font-headline font-bold text-lg text-on-surface mb-1">
-                    {client.name}
-                  </h3>
-                  <p className="text-xs text-on-surface-variant mb-1">{client.industry || client.brand || "—"}</p>
-                  <p className="text-[10px] text-on-surface-variant/50 uppercase tracking-wider mb-5">
-                    {client.platforms?.join(" · ") || "No platforms set"}
-                  </p>
-
-                  {/* Pipeline progress */}
-                  <div>
-                    <div className="flex justify-between text-[9px] uppercase tracking-wider text-on-surface-variant/50 mb-2">
-                      {PIPELINE_STAGES.map((s, i) => (
-                        <span key={s} className={i <= stage ? "text-primary font-bold" : ""}>{s}</span>
-                      ))}
-                    </div>
-                    <div className="h-1 bg-surface-container-high rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-primary transition-all duration-500"
-                        style={{ width: `${(stage / (PIPELINE_STAGES.length - 1)) * 100}%` }}
-                      />
-                    </div>
-                  </div>
-                </Link>
-              );
-            })}
-
-            {/* Add new client */}
-            <Link
-              href="/onboarding"
-              className="border-2 border-dashed border-outline-variant/30 rounded-2xl p-6 flex flex-col items-center justify-center gap-3 hover:border-primary/40 hover:bg-primary/5 transition-all text-on-surface-variant/50 hover:text-primary group"
-            >
-              <Icon name="add_circle" className="text-3xl group-hover:scale-110 transition-transform" />
-              <span className="text-sm font-semibold font-headline">Onboard New Client</span>
-            </Link>
-          </div>
-        )}
       </div>
+
     </DashboardShell>
   );
 }

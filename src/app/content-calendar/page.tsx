@@ -1,283 +1,263 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
-import Link from "next/link";
+import { useEffect, useState } from "react";
 import { DashboardShell } from "@/components/layout/DashboardShell";
-import { Icon } from "@/components/ui/Icon";
 import { useApi } from "@/hooks/useApi";
+import { useRoleGuard } from "@/hooks/useRoleGuard";
 
-const PLATFORM_ICON: Record<string, string> = {
-  instagram: "camera",
-  linkedin: "work",
-  tiktok: "music_video",
-  x: "tag",
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const TODAY = new Date();
+
+const CLIENT_COLORS: Record<string, string> = {
+  0: "cof", 1: "cbl", 2: "cns", 3: "ckr", 4: "caw",
 };
 
-const STATUS_CLASSES: Record<string, string> = {
-  DRAFT: "bg-secondary/10 text-secondary",
-  IN_DESIGN: "bg-secondary/10 text-secondary",
-  CREATIVE_UPLOADED: "bg-primary/10 text-primary",
-  AWAITING_APPROVAL: "bg-tertiary/10 text-tertiary",
-  REVISION_REQUIRED: "bg-error/10 text-error",
-  APPROVED: "bg-emerald-100 text-emerald-700",
-  SCHEDULED: "bg-emerald-100 text-emerald-700",
-  PUBLISHED: "bg-emerald-100 text-emerald-700",
-  FAILED: "bg-error/10 text-error",
-};
+function buildCalendarCells(year: number, month: number) {
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const offset = firstDay === 0 ? 6 : firstDay - 1;
+  const prevDays = new Date(year, month, 0).getDate();
+  const cells: { day: number; current: boolean; today: boolean }[] = [];
+  for (let i = offset - 1; i >= 0; i--) cells.push({ day: prevDays - i, current: false, today: false });
+  for (let d = 1; d <= daysInMonth; d++) cells.push({ day: d, current: true, today: d === TODAY.getDate() && month === TODAY.getMonth() && year === TODAY.getFullYear() });
+  while (cells.length % 7 !== 0) cells.push({ day: cells.length - (offset + daysInMonth) + 1, current: false, today: false });
+  return cells;
+}
 
-const STATUS_DOT: Record<string, string> = {
-  DRAFT: "bg-secondary",
-  IN_DESIGN: "bg-secondary",
-  CREATIVE_UPLOADED: "bg-primary",
-  AWAITING_APPROVAL: "bg-tertiary",
-  REVISION_REQUIRED: "bg-error",
-  APPROVED: "bg-emerald-600",
-  SCHEDULED: "bg-emerald-600",
-  PUBLISHED: "bg-emerald-600",
-  FAILED: "bg-error",
-};
-
-function ContentCalendarInner() {
-  const searchParams = useSearchParams();
-  const projectId = searchParams.get("projectId");
+export default function ContentCalendarPage() {
   const api = useApi();
-
+  const { checking } = useRoleGuard(["ADMIN"]);
+  const [clients, setClients] = useState<any[]>([]);
   const [posts, setPosts] = useState<any[]>([]);
-  const [project, setProject] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [calView, setCalView] = useState<"grid" | "list">("grid");
+  const [filterClient, setFilterClient] = useState("all");
+  const [filterPlatform, setFilterPlatform] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [filterFormat, setFilterFormat] = useState("all");
+  const [filterDesigner, setFilterDesigner] = useState("all");
+  const [curYear, setCurYear] = useState(TODAY.getFullYear());
+  const [curMonth, setCurMonth] = useState(TODAY.getMonth());
+  const [drawerPost, setDrawerPost] = useState<any>(null);
+  const [postActionLoading, setPostActionLoading] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!projectId) { setLoading(false); return; }
+    if (checking) return;
     (async () => {
       try {
-        const [postsData, projectData] = await Promise.all([
-          api.posts.listByProject(projectId),
-          api.projects.get(projectId),
-        ]);
-        setPosts(postsData);
-        setProject(projectData);
-      } catch (e: any) {
-        setError(e.message);
-      } finally {
-        setLoading(false);
-      }
+        const clientData = await api.clients.list();
+        setClients(clientData);
+        const allPosts: any[] = [];
+        for (const c of clientData.slice(0, 5)) {
+          try { const p = await api.posts.listByClient(c.id); allPosts.push(...p.map((x: any) => ({ ...x, clientName: c.name }))); } catch {}
+        }
+        setPosts(allPosts);
+      } catch {}
+      finally { setLoading(false); }
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId]);
+  }, [checking]);
 
-  const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  const monthLabel = project
-    ? `${MONTH_NAMES[(project.month || 1) - 1]} ${project.year}`
-    : "Content Calendar";
+  if (checking) return null;
 
-  const contextLabel = project?.client?.name || project?.title || "Content Calendar";
-  const awaitingCount = posts.filter((p) => p.status === "AWAITING_APPROVAL").length;
+  const filteredPosts = posts.filter((p) => {
+    if (filterClient !== "all" && p.clientName !== filterClient) return false;
+    if (filterPlatform !== "all" && p.platform !== filterPlatform) return false;
+    if (filterStatus !== "all" && p.status !== filterStatus) return false;
+    if (filterFormat !== "all" && p.format !== filterFormat) return false;
+    if (filterDesigner !== "all" && p.designer !== filterDesigner) return false;
+    if (p.scheduledDate) {
+      const d = new Date(p.scheduledDate);
+      return d.getFullYear() === curYear && d.getMonth() === curMonth;
+    }
+    return true;
+  });
 
-  if (loading) {
-    return (
-      <DashboardShell contextLabel="Content Calendar">
-        <div className="p-12 flex items-center justify-center min-h-screen">
-          <div className="w-8 h-8 border-2 border-primary/20 border-t-primary rounded-full animate-spin" />
-        </div>
-      </DashboardShell>
-    );
+  const cells = buildCalendarCells(curYear, curMonth);
+
+  function getPostsForDay(day: number) {
+    return filteredPosts.filter((p) => {
+      if (!p.scheduledDate) return false;
+      const d = new Date(p.scheduledDate);
+      return d.getDate() === day && d.getMonth() === curMonth && d.getFullYear() === curYear;
+    });
   }
 
-  if (!projectId || error) {
-    return (
-      <DashboardShell contextLabel="Content Calendar">
-        <div className="p-12 text-center space-y-4">
-          <p className="text-on-surface-variant">{error || "No project selected. Open a project from a client page."}</p>
-          <Link href="/dashboard" className="text-primary hover:underline text-sm">← Dashboard</Link>
-        </div>
-      </DashboardShell>
-    );
+  const clientColorMap: Record<string, string> = {};
+  clients.forEach((c, i) => { clientColorMap[c.name] = CLIENT_COLORS[i % 5] ?? "cof"; });
+
+  function prevMonth() { if (curMonth === 0) { setCurMonth(11); setCurYear((y) => y - 1); } else { setCurMonth((m) => m - 1); } }
+  function nextMonth() { if (curMonth === 11) { setCurMonth(0); setCurYear((y) => y + 1); } else { setCurMonth((m) => m + 1); } }
+
+  async function calApprovePost(postId: string) {
+    setPostActionLoading(`approve-${postId}`);
+    try {
+      await api.posts.approve(postId, "APPROVED", "");
+      setPosts((prev) => prev.map((p) => p.id === postId ? { ...p, status: "APPROVED" } : p));
+      setDrawerPost((d: any) => d?.id === postId ? { ...d, status: "APPROVED" } : d);
+    } catch {}
+    setPostActionLoading(null);
+  }
+
+  async function calRevisePost(postId: string) {
+    setPostActionLoading(`revise-${postId}`);
+    try {
+      await api.posts.approve(postId, "CHANGES_REQUESTED", "");
+      setPosts((prev) => prev.map((p) => p.id === postId ? { ...p, status: "REVISION_REQUIRED" } : p));
+      setDrawerPost((d: any) => d?.id === postId ? { ...d, status: "REVISION_REQUIRED" } : d);
+    } catch {}
+    setPostActionLoading(null);
   }
 
   return (
-    <DashboardShell contextLabel={contextLabel}>
-      <div className="px-8 pb-12 pt-8 min-h-screen">
+    <DashboardShell title="Calendars">
+      <div style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
+        {/* Filters */}
+        <div className="fst">
+          <div className="fg2">
+            <div className="fgl">Client</div>
+            <select className="fs" value={filterClient} onChange={(e) => setFilterClient(e.target.value)}>
+              <option value="all">All clients</option>
+              {clients.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
+            </select>
+          </div>
+          <div className="fg2">
+            <div className="fgl">Channel</div>
+            <select className="fs" value={filterPlatform} onChange={(e) => setFilterPlatform(e.target.value)}>
+              <option value="all">All channels</option>
+              {["instagram","linkedin","facebook","tiktok","x"].map((p) => <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>)}
+            </select>
+          </div>
+          <div className="fg2">
+            <div className="fgl">Status</div>
+            <select className="fs" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
+              <option value="all">All statuses</option>
+              {["PUBLISHED","SCHEDULED","IN_DESIGN","AWAITING_APPROVAL","REVISION_REQUIRED"].map((s) => <option key={s} value={s}>{s.replace(/_/g, " ")}</option>)}
+            </select>
+          </div>
+          <div className="fg2">
+            <div className="fgl">Format</div>
+            <select className="fs" value={filterFormat} onChange={(e) => setFilterFormat(e.target.value)}>
+              <option value="all">All formats</option>
+              {["Static","Reel","Carousel","Story"].map((f) => <option key={f} value={f}>{f}</option>)}
+            </select>
+          </div>
+          <div className="fg2">
+            <div className="fgl">Designer</div>
+            <select className="fs" value={filterDesigner} onChange={(e) => setFilterDesigner(e.target.value)}>
+              <option value="all">All designers</option>
+              <option value="AI">AI agents</option>
+              <option value="Dana M.">Dana M.</option>
+            </select>
+          </div>
+          <div className="fg2">
+            <div className="fgl">Month</div>
+            <select className="fs" value={`${curYear}-${curMonth}`} onChange={(e) => { const [y, m] = e.target.value.split("-"); setCurYear(Number(y)); setCurMonth(Number(m)); }}>
+              {[-1,0,1,2,3].map((offset) => {
+                let m = TODAY.getMonth() + offset, y = TODAY.getFullYear();
+                if (m < 0) { m += 12; y -= 1; } if (m > 11) { m -= 12; y += 1; }
+                return <option key={`${y}-${m}`} value={`${y}-${m}`}>{MONTHS[m]} {y}</option>;
+              })}
+            </select>
+          </div>
+          <div className="vt" style={{ alignSelf: "flex-end" }}>
+            <button className={`vtb${calView === "grid" ? " on" : ""}`} onClick={() => setCalView("grid")}><i className="ti ti-calendar" /></button>
+            <button className={`vtb${calView === "list" ? " on" : ""}`} onClick={() => setCalView("list")}><i className="ti ti-list" /></button>
+          </div>
+        </div>
 
-        {/* Header */}
-        <header className="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 text-xs text-on-surface-variant mb-2">
-              {project?.clientId && (
-                <>
-                  <Link href={`/clients/${project.clientId}`} className="hover:text-primary transition-colors">
-                    {project.client?.name || "Client"}
-                  </Link>
-                  <Icon name="chevron_right" className="text-xs" />
-                  <Link href={`/projects/${projectId}`} className="hover:text-primary transition-colors">
-                    {project.title || monthLabel}
-                  </Link>
-                  <Icon name="chevron_right" className="text-xs" />
-                </>
-              )}
-              <span className="text-on-surface font-semibold">Calendar</span>
+        {/* Content area */}
+        <div style={{ flex: 1, overflow: "hidden", display: "flex" }}>
+          <div style={{ flex: 1, overflowY: "auto", padding: "14px 22px" }}>
+            {/* Month navigation */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <button className="gb gbg gbs" onClick={prevMonth}><i className="ti ti-chevron-left" /></button>
+                <div style={{ fontSize: 15, fontWeight: 300, color: "var(--t1)" }}>{MONTHS[curMonth]} {curYear}</div>
+                <button className="gb gbg gbs" onClick={nextMonth}><i className="ti ti-chevron-right" /></button>
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {clients.slice(0, 5).map((c, i) => (
+                  <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 9, color: "var(--t4)" }}>
+                    <div style={{ width: 7, height: 7, borderRadius: 2, background: ["var(--blue)","var(--green)","var(--purple)","var(--amber)","var(--red)"][i % 5] }} />
+                    {c.name.split(" ")[0]}
+                  </div>
+                ))}
+              </div>
             </div>
-            <span className="uppercase tracking-[0.2em] text-on-surface-variant font-medium text-[10px]">Campaign Management</span>
-            <h1 className="text-4xl font-headline font-extrabold tracking-tight text-primary">Content Calendar</h1>
-          </div>
 
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="flex bg-surface-container-low p-1 rounded-lg">
-              <span className="px-4 py-2 bg-white shadow-sm rounded-md text-sm font-semibold text-primary">
-                List View
-              </span>
-              <Link
-                href={`/posting-plan?projectId=${projectId}`}
-                className="px-4 py-2 text-sm font-semibold text-stone-500 hover:text-stone-700 transition-all"
-              >
-                Timeline
-              </Link>
-            </div>
-            <div className="flex items-center bg-surface-container-low rounded-lg px-3 py-2 gap-2">
-              <Icon name="calendar_month" className="text-primary text-sm" />
-              <span className="text-sm font-bold text-primary font-headline">{monthLabel}</span>
-            </div>
-          </div>
-        </header>
-
-        {/* Metrics */}
-        <section className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
-          <div className="bg-surface-container-lowest p-6 rounded-xl shadow-sm border border-outline-variant/10 flex flex-col justify-between">
-            <span className="uppercase tracking-widest text-[10px] text-stone-400">Total Posts</span>
-            <div className="mt-4 flex items-end justify-between">
-              <span className="text-3xl font-headline font-bold text-primary">{String(posts.length).padStart(2, "0")}</span>
-            </div>
-          </div>
-          <div className="bg-surface-container-lowest p-6 rounded-xl shadow-sm border border-outline-variant/10 flex flex-col justify-between">
-            <span className="uppercase tracking-widest text-[10px] text-stone-400">Awaiting Approval</span>
-            <div className="mt-4 flex items-end justify-between">
-              <span className="text-3xl font-headline font-bold text-tertiary">{String(awaitingCount).padStart(2, "0")}</span>
-              {awaitingCount > 0 && (
-                <span className="bg-tertiary/10 text-tertiary px-2 py-0.5 rounded text-[10px] font-bold">Action Required</span>
-              )}
-            </div>
-          </div>
-          <div className="bg-surface-container-lowest p-6 rounded-xl shadow-sm border border-outline-variant/10 flex flex-col justify-between">
-            <span className="uppercase tracking-widest text-[10px] text-stone-400">Approved</span>
-            <div className="mt-4">
-              <span className="text-3xl font-headline font-bold text-emerald-600">
-                {String(posts.filter((p) => ["APPROVED","SCHEDULED","PUBLISHED"].includes(p.status)).length).padStart(2, "0")}
-              </span>
-            </div>
-          </div>
-          <div className="md:col-span-1 bg-primary text-white p-6 rounded-xl shadow-xl flex items-center justify-between relative overflow-hidden">
-            <div className="relative z-10">
-              <h3 className="text-base font-headline font-bold">{project?.title || monthLabel}</h3>
-              <p className="text-primary-fixed-dim text-xs mt-1 capitalize">{project?.status?.replace(/_/g, " ")}</p>
-            </div>
-            <Link
-              href={`/projects/${projectId}`}
-              className="relative z-10 bg-white/10 hover:bg-white/20 backdrop-blur-md px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all"
-            >
-              Project
-            </Link>
-            <div className="absolute -right-4 -bottom-4 opacity-10">
-              <Icon name="calendar_month" className="text-[120px]" />
-            </div>
-          </div>
-        </section>
-
-        {/* Post table */}
-        {posts.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24 text-center">
-            <Icon name="calendar_month" className="text-6xl text-primary/20 mb-6" />
-            <p className="text-on-surface-variant text-sm">No posts in this calendar yet.</p>
-            <Link href={`/projects/${projectId}`} className="text-primary hover:underline text-sm mt-3">
-              ← Back to project to generate calendar
-            </Link>
-          </div>
-        ) : (
-          <>
-            <div className="bg-surface-container-lowest rounded-xl shadow-sm overflow-x-auto border border-outline-variant/5">
-              <table className="w-full text-left border-collapse min-w-[860px]">
-                <thead>
-                  <tr className="bg-surface-container-low/50">
-                    <th className="px-8 py-4 uppercase tracking-widest text-[10px] font-bold text-stone-500">Post</th>
-                    <th className="px-6 py-4 uppercase tracking-widest text-[10px] font-bold text-stone-500">Caption Preview</th>
-                    <th className="px-6 py-4 uppercase tracking-widest text-[10px] font-bold text-stone-500">Status</th>
-                    <th className="px-6 py-4 uppercase tracking-widest text-[10px] font-bold text-stone-500">Schedule</th>
-                    <th className="px-8 py-4 text-right" />
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-surface-container">
-                  {posts.map((post: any) => (
-                    <tr key={post.id} className="group hover:bg-surface-container-low/30 transition-colors">
-                      <td className="px-8 py-6">
-                        <div className="flex items-center gap-4">
-                          <div className="w-10 h-10 rounded-full bg-secondary-container flex items-center justify-center shrink-0">
-                            <Icon name={PLATFORM_ICON[post.platform] || "share"} className="text-on-secondary-container" />
-                          </div>
-                          <div>
-                            <p className="font-headline font-bold text-on-surface line-clamp-1">{post.topic}</p>
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400 mt-0.5">
-                              {post.platform} · {post.format}
-                            </p>
-                          </div>
+            {loading ? (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 200 }}>
+                <div style={{ width: 28, height: 28, border: "2px solid rgba(52,217,123,.2)", borderTopColor: "#34d97b", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
+              </div>
+            ) : calView === "grid" ? (
+              <div className="cg">
+                {["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map((d) => <div key={d} className="dh">{d}</div>)}
+                {cells.map((cell, i) => {
+                  const dayPosts = cell.current ? getPostsForDay(cell.day) : [];
+                  return (
+                    <div key={i} className={`dc${!cell.current ? " om" : ""}${cell.today ? " td" : ""}`}>
+                      <div className="dnw"><div className="dn">{cell.day}</div></div>
+                      {dayPosts.slice(0, 3).map((p, j) => (
+                        <div key={j} className={`pc ${clientColorMap[p.clientName] ?? "cof"}`} onClick={() => setDrawerPost(p)}>
+                          <i className={`ti ti-brand-${p.platform}`} style={{ fontSize: 6 }} />
+                          {(p.clientName ?? "").split(" ")[0]}·{(p.topic ?? p.format ?? "").slice(0, 6)}
                         </div>
-                      </td>
-                      <td className="px-6 py-6">
-                        <p className="text-sm text-on-surface-variant max-w-xs line-clamp-2">{post.caption}</p>
-                      </td>
-                      <td className="px-6 py-6">
-                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-bold ${STATUS_CLASSES[post.status] || "bg-secondary/10 text-secondary"}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full mr-2 ${STATUS_DOT[post.status] || "bg-secondary"}`} />
-                          {post.status?.replace(/_/g, " ")}
-                        </span>
-                      </td>
-                      <td className="px-6 py-6">
-                        <div className="text-sm">
-                          <p className="font-semibold text-on-surface">
-                            {post.scheduledDate
-                              ? new Date(post.scheduledDate).toLocaleDateString("en", { month: "short", day: "numeric", year: "numeric" })
-                              : "—"}
-                          </p>
-                          <p className="text-stone-400 text-xs capitalize">{post.objective}</p>
-                        </div>
-                      </td>
-                      <td className="px-8 py-6 text-right">
-                        <Link
-                          href={`/post-review?postId=${post.id}`}
-                          className="opacity-0 group-hover:opacity-100 p-2 hover:bg-surface-container-high rounded-lg transition-all inline-flex"
-                        >
-                          <Icon name="arrow_forward" className="text-stone-400" />
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                      ))}
+                      {dayPosts.length > 3 && <div style={{ fontSize: 7, color: "var(--t4)", padding: "1px 4px" }}>+{dayPosts.length - 3} more</div>}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="cd" style={{ padding: 0, overflow: "hidden" }}>
+                {filteredPosts.length === 0 ? (
+                  <div style={{ padding: "24px 14px", textAlign: "center", fontSize: 11, color: "var(--t4)" }}>No posts this month</div>
+                ) : filteredPosts.sort((a, b) => new Date(a.scheduledDate ?? 0).getTime() - new Date(b.scheduledDate ?? 0).getTime()).map((p) => (
+                  <div key={p.id} className="clr" style={{ cursor: "pointer" }} onClick={() => setDrawerPost(p)}>
+                    <div className="cld">{p.scheduledDate ? new Date(p.scheduledDate).toLocaleDateString("en", { month: "short", day: "numeric" }) : "—"}</div>
+                    <span className={`ctg ct${(clientColorMap[p.clientName] ?? "of").replace("c","").replace("of","of").slice(0, 2)}`} style={{ fontSize: 10 }}>{(p.clientName ?? "").split(" ").map((w: string) => w[0]).join("").slice(0, 2)}</span>
+                    <div className="clt">{p.topic ?? p.hook ?? "Post"}</div>
+                    <span className="pl plb" style={{ fontSize: 9 }}>{p.platform}</span>
+                    <span style={{ fontSize: 10, color: "var(--t3)", fontWeight: 300 }}>{p.format}</span>
+                    <span className={`pl ${p.status === "PUBLISHED" ? "plg" : p.status === "SCHEDULED" ? "plb" : p.status === "REVISION_REQUIRED" ? "plr" : "pla"}`} style={{ fontSize: 9 }}>{p.status?.replace(/_/g," ")}</span>
+                    <button className="gb gbs">View</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
-            <footer className="mt-8 flex items-center justify-between">
-              <p className="text-xs text-stone-400 font-medium uppercase tracking-widest">
-                {posts.length} post{posts.length !== 1 ? "s" : ""} this month
-              </p>
-              <Link
-                href={`/posting-plan?projectId=${projectId}`}
-                className="text-primary font-headline text-xs font-bold uppercase tracking-widest border-b border-primary/20 pb-1 hover:border-primary transition-all"
-              >
-                View Timeline →
-              </Link>
-            </footer>
-          </>
-        )}
+          {/* Side drawer */}
+          {drawerPost && (
+            <div className="sd">
+              <div className="sdh">
+                <div className="sdt">{drawerPost.topic ?? "Post detail"}</div>
+                <button className="sdc" onClick={() => setDrawerPost(null)}><i className="ti ti-x" style={{ fontSize: 10 }} /></button>
+              </div>
+              <div className="sdb">
+                <div className="sdr"><span className="sdl">Post</span><span className="sdv">{drawerPost.topic ?? drawerPost.hook ?? "—"}</span></div>
+                <div className="sdr"><span className="sdl">Client</span><span className="sdv">{drawerPost.clientName}</span></div>
+                <div className="sdr"><span className="sdl">Platform</span><span className="sdv">{drawerPost.platform}</span></div>
+                <div className="sdr"><span className="sdl">Format</span><span className="sdv">{drawerPost.format}</span></div>
+                <div className="sdr"><span className="sdl">Status</span><span className="sdv" style={{ color: drawerPost.status === "PUBLISHED" ? "var(--green)" : drawerPost.status === "REVISION_REQUIRED" ? "var(--red)" : "var(--amber)" }}>{drawerPost.status?.replace(/_/g," ")}</span></div>
+                {drawerPost.caption && (<><div className="fll">Caption</div><div className="ib" style={{ fontSize: 10 }}>{drawerPost.caption}</div></>)}
+              </div>
+              <div className="sda">
+                <button className="gb gbp" style={{ justifyContent: "center" }} disabled={!!postActionLoading} onClick={() => calApprovePost(drawerPost.id)}>
+                  {postActionLoading === `approve-${drawerPost.id}` ? <><span style={{ display: "inline-block", width: 11, height: 11, border: "2px solid rgba(0,0,0,.2)", borderTopColor: "#000", borderRadius: "50%", animation: "spin 1s linear infinite" }} /> Approving…</> : <><i className="ti ti-check" />{drawerPost.status === "APPROVED" ? "Approved ✓" : "Approve"}</>}
+                </button>
+                <button className="gb gba" style={{ justifyContent: "center" }} disabled={!!postActionLoading}>
+                  <i className="ti ti-send" />Send to client
+                </button>
+                <button className="gb gbr" style={{ justifyContent: "center" }} disabled={!!postActionLoading} onClick={() => calRevisePost(drawerPost.id)}>
+                  {postActionLoading === `revise-${drawerPost.id}` ? <><span style={{ display: "inline-block", width: 11, height: 11, border: "2px solid rgba(255,107,107,.3)", borderTopColor: "var(--red)", borderRadius: "50%", animation: "spin 1s linear infinite" }} /> Requesting…</> : <><i className="ti ti-refresh" />Request revision</>}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </DashboardShell>
   );
-}
-
-const Spinner = () => (
-  <div className="min-h-screen flex items-center justify-center bg-surface">
-    <div className="w-8 h-8 border-2 border-primary/20 border-t-primary rounded-full animate-spin" />
-  </div>
-);
-
-export default function ContentCalendarPage() {
-  return <Suspense fallback={<Spinner />}><ContentCalendarInner /></Suspense>;
 }

@@ -1,422 +1,404 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
-import { Icon } from "@/components/ui/Icon";
 import { useApi } from "@/hooks/useApi";
 import { useRoleGuard } from "@/hooks/useRoleGuard";
-import { useToast } from "@/components/ui/Toast";
 
-const PLATFORM_ICON: Record<string, string> = {
-  instagram: "camera",
-  linkedin: "work",
-  tiktok: "music_video",
-  x: "tag",
-};
+const TODAY = new Date();
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-const STATUS_LABEL: Record<string, { label: string; color: string }> = {
-  SENT_TO_CLIENT:    { label: "Awaiting your approval", color: "bg-amber-100 text-amber-700" },
-  CHANGES_REQUESTED: { label: "Changes requested",      color: "bg-orange-100 text-orange-700" },
-  APPROVED:          { label: "Approved",               color: "bg-emerald-100 text-emerald-700" },
-};
+const TABS = [
+  { key: "strategy", label: "Strategy", icon: "ti-flag" },
+  { key: "creative", label: "Creative approvals", icon: "ti-photo" },
+  { key: "calendar", label: "Content calendar", icon: "ti-calendar" },
+  { key: "reports", label: "Reports", icon: "ti-chart-bar" },
+];
+
+function ClientPortalLayout({ children, activeTab, onTabChange, user, isDark, onToggleTheme }: any) {
+  return (
+    <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "row", overflow: "hidden", background: "var(--bg)" }}>
+      {/* Sidebar */}
+      <div style={{ width: 220, minWidth: 220, height: "100%", background: "var(--sb)", borderRight: "1px solid var(--sb-b)", display: "flex", flexDirection: "column", flexShrink: 0, backdropFilter: "blur(24px)", position: "relative", zIndex: 10 }}>
+        <div style={{ padding: "22px 18px 16px", borderBottom: "1px solid var(--sb-b)", userSelect: "none" }}>
+          <div style={{ fontSize: 16, fontWeight: 300, letterSpacing: ".28em", color: "var(--green)" }}>ZŸR</div>
+          <div style={{ fontSize: 9, color: "var(--t4)", letterSpacing: ".14em", marginTop: 2, fontWeight: 300 }}>Client Portal</div>
+        </div>
+        {/* Client badge */}
+        <div style={{ padding: "10px 12px 8px" }}>
+          <div style={{ background: "var(--gb)", border: "1px solid var(--gbb)", borderRadius: 10, padding: "10px 12px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ width: 28, height: 28, borderRadius: 8, background: "var(--bb)", border: "1px solid var(--bbb)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "var(--blue)", fontWeight: 400, flexShrink: 0 }}>
+                {user?.firstName?.[0]}{user?.lastName?.[0]}
+              </div>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 400, color: "var(--t1)" }}>{user?.firstName ?? "Client"}</div>
+                <div style={{ fontSize: 9, color: "var(--green)" }}>Active client</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style={{ padding: "8px 6px", flex: 1, overflowY: "auto" }}>
+          {TABS.map((t) => (
+            <div key={t.key} className={`ni${activeTab === t.key ? " act" : ""}`} onClick={() => onTabChange(t.key)} style={{ cursor: "pointer" }}>
+              <i className={`ti ${t.icon}`} />
+              <span>{t.label}</span>
+            </div>
+          ))}
+        </div>
+        <div style={{ padding: "10px 6px", borderTop: "1px solid var(--sb-b)" }}>
+          <div className="ur">
+            <div className="av">{user?.firstName?.[0]}{user?.lastName?.[0]}</div>
+            <div>
+              <div className="un">{[user?.firstName, user?.lastName].filter(Boolean).join(" ") || "Client"}</div>
+              <div className="uro">Client</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Main */}
+      <div style={{ flex: 1, height: "100%", display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
+        {/* Topbar */}
+        <div className="tb">
+          <div>
+            <div className="pgt">{TABS.find((t) => t.key === activeTab)?.label ?? "Portal"}</div>
+            <div className="pgb">June {TODAY.getFullYear()}</div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+            <div className="tt" onClick={onToggleTheme}>
+              <span className="ttl">{isDark ? "Dark" : "Light"}</span>
+              <div className="ttk"><i className={`ti ${isDark ? "ti-moon" : "ti-sun"}`} style={{ fontSize: 11 }} /></div>
+            </div>
+          </div>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
 
 export default function ClientPortalPage() {
-  const api  = useApi();
-  const toast = useToast();
+  const api = useApi();
   const { checking, user } = useRoleGuard(["CLIENT", "ADMIN"]);
-
-  const [client, setClient]       = useState<any>(null);
-  const [strategy, setStrategy]   = useState<any>(null);
-  const [posts, setPosts]         = useState<any[]>([]);
-  const [loading, setLoading]     = useState(true);
-  const [notLinked, setNotLinked] = useState(false);
-
-  const [approvingStrategy, setApprovingStrategy]   = useState(false);
-  const [approvingPost, setApprovingPost]           = useState<string | null>(null);
-  const [strategyComment, setStrategyComment]       = useState("");
-  const [showStrategyComment, setShowStrategyComment] = useState(false);
+  const [activeTab, setActiveTab] = useState("strategy");
+  const [isDark, setIsDark] = useState(true);
+  const [strategy, setStrategy] = useState<any>(null);
+  const [posts, setPosts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [strategyApproved, setStrategyApproved] = useState(false);
+  const [approvedModal, setApprovedModal] = useState(false);
+  const [revisionModal, setRevisionModal] = useState(false);
+  const [revisionContext, setRevisionContext] = useState<"strategy" | "post">("strategy");
+  const [revisionPost, setRevisionPost] = useState<any>(null);
+  const [revisionComment, setRevisionComment] = useState("");
+  const [creativeFilter, setCreativeFilter] = useState<"all" | "pending" | "approved">("all");
 
   useEffect(() => {
     if (checking) return;
     (async () => {
       try {
-        const clients = await api.clients.list();
-        const myClient = clients[0];
-        if (!myClient) {
-          setNotLinked(true);
-          setLoading(false);
-          return;
+        const me = await api.users.me();
+        if (me.clientOf?.id) {
+          try { const strats = await api.strategy.listByClient(me.clientOf.id); if (strats.length) setStrategy(strats[0]); } catch {}
+          try { setPosts(await api.posts.listByClient(me.clientOf.id)); } catch {}
         }
-        setClient(myClient);
-
-        const [strategies, approvalQueue] = await Promise.allSettled([
-          api.strategy.listByClient(myClient.id),
-          api.posts.approvalQueue(myClient.id),
-        ]);
-
-        if (strategies.status === "fulfilled") {
-          const sent = strategies.value.find((s: any) =>
-            ["SENT_TO_CLIENT", "CHANGES_REQUESTED", "APPROVED"].includes(s.status)
-          );
-          setStrategy(sent || null);
-        }
-
-        if (approvalQueue.status === "fulfilled") {
-          setPosts(approvalQueue.value);
-        }
-      } catch (e: any) {
-        toast.error("Failed to load portal", e?.message ?? "Unknown error");
-      } finally {
-        setLoading(false);
-      }
+      } catch {}
+      finally { setLoading(false); }
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [checking]);
 
-  async function handleStrategyApprove(action: "APPROVED" | "CHANGES_REQUESTED") {
+  function toggleTheme() {
+    const html = document.documentElement;
+    const goLight = html.classList.contains("dark");
+    html.classList.toggle("dark", !goLight);
+    html.classList.toggle("light", goLight);
+    setIsDark(!goLight);
+  }
+
+  async function approveStrategy() {
     if (!strategy) return;
-    setApprovingStrategy(true);
-    try {
-      await api.strategy.approve(strategy.id, action, strategyComment);
-      // Update status locally — the API returns { success, action }, not the full strategy
-      setStrategy((prev: any) => ({
-        ...prev,
-        status: action === "APPROVED" ? "APPROVED" : "CHANGES_REQUESTED",
-      }));
-      setStrategyComment("");
-      setShowStrategyComment(false);
-      toast.success(action === "APPROVED" ? "Strategy approved!" : "Feedback submitted — your agency has been notified");
-    } catch (e: any) {
-      toast.error("Action failed", e?.message);
-    } finally {
-      setApprovingStrategy(false);
+    try { await api.strategy.approve(strategy.id, "APPROVED", ""); } catch {}
+    setStrategyApproved(true);
+    setApprovedModal(true);
+  }
+
+  async function approvePost(post: any) {
+    try { await api.posts.approve(post.id, "APPROVED", ""); setPosts((p) => p.map((x) => x.id === post.id ? { ...x, status: "APPROVED" } : x)); } catch {}
+  }
+
+  async function handleRevision() {
+    if (revisionContext === "strategy" && strategy) {
+      try {
+        await api.strategy.approve(strategy.id, "CHANGES_REQUESTED", revisionComment);
+        setStrategy((s: any) => ({ ...s, status: "CHANGES_REQUESTED" }));
+      } catch {}
+    } else if (revisionContext === "post" && revisionPost) {
+      try {
+        await api.posts.approve(revisionPost.id, "CHANGES_REQUESTED", revisionComment);
+        setPosts((p) => p.map((x) => x.id === revisionPost.id ? { ...x, status: "REVISION_REQUIRED" } : x));
+      } catch {}
     }
+    setRevisionComment("");
+    setRevisionPost(null);
+    setRevisionModal(false);
   }
 
-  async function handlePostApprove(postId: string, action: "APPROVED" | "CHANGES_REQUESTED") {
-    setApprovingPost(postId);
-    try {
-      await api.posts.approve(postId, action, "");
-      setPosts((prev) => prev.filter((p) => p.id !== postId));
-      toast.success(action === "APPROVED" ? "Post approved" : "Revision requested");
-    } catch (e: any) {
-      toast.error("Action failed", e?.message);
-    } finally {
-      setApprovingPost(null);
-    }
-  }
+  if (checking || loading) return (
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#0f0f1a" }}>
+      <div style={{ width: 32, height: 32, border: "2px solid rgba(52,217,123,.2)", borderTopColor: "#34d97b", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
+    </div>
+  );
 
-  if (checking) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-surface">
-        <div className="w-8 h-8 border-2 border-primary/20 border-t-primary rounded-full animate-spin" />
-      </div>
-    );
-  }
-
-  const pendingCount = posts.length + (strategy?.status === "SENT_TO_CLIENT" ? 1 : 0);
+  const pendingPosts = posts.filter((p) => p.status === "AWAITING_APPROVAL");
 
   return (
-    <>
-      {/* Nav */}
-      <nav className="fixed top-0 w-full z-50 bg-white/90 backdrop-blur-md h-20 flex items-center border-b border-outline-variant/10">
-        <div className="flex justify-between items-center px-8 md:px-16 w-full max-w-screen-xl mx-auto">
-          <span className="text-xl font-bold tracking-tighter text-primary font-headline">
-            Atelier Martech
-          </span>
-          <div className="flex items-center gap-4">
-            {pendingCount > 0 && (
-              <span className="flex items-center gap-1.5 px-3 py-1.5 bg-tertiary/10 text-tertiary rounded-full text-[10px] font-bold uppercase tracking-widest">
-                <span className="w-1.5 h-1.5 rounded-full bg-tertiary animate-pulse" />
-                {pendingCount} pending
-              </span>
-            )}
-            <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-headline font-bold text-sm">
-              {user?.firstName?.charAt(0) || client?.name?.charAt(0) || "C"}
+    <ClientPortalLayout activeTab={activeTab} onTabChange={setActiveTab} user={user} isDark={isDark} onToggleTheme={toggleTheme}>
+      {/* ── Strategy ── */}
+      {activeTab === "strategy" && (
+        <div className="sa">
+          {strategyApproved || strategy?.status === "APPROVED" ? (
+            <div style={{ background: "var(--gb)", border: "1px solid var(--gbb)", borderRadius: 12, padding: 16, marginBottom: 14, display: "flex", alignItems: "center", gap: 12 }}>
+              <i className="ti ti-circle-check" style={{ fontSize: 24, color: "var(--green)" }} />
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 400, color: "var(--green)" }}>Strategy approved</div>
+                <div style={{ fontSize: 10, color: "var(--t3)", fontWeight: 300 }}>Your agency will proceed with the content calendar.</div>
+              </div>
+            </div>
+          ) : (
+            <div style={{ background: "var(--gb)", border: "1px solid var(--gbb)", borderRadius: 12, padding: 16, marginBottom: 14 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                <div style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--green)" }} />
+                <div style={{ fontSize: 12, fontWeight: 400, color: "var(--green)" }}>New strategy ready for your review</div>
+                <div style={{ marginLeft: "auto", fontSize: 10, color: "var(--t4)" }}>Sent 2 days ago</div>
+              </div>
+              <div style={{ fontSize: 11, color: "var(--t2)", lineHeight: 1.6, fontWeight: 300 }}>Your agency has prepared a social media strategy. Please review each section below and approve or request changes.</div>
+            </div>
+          )}
+
+          <div className="g2">
+            <div>
+              {strategy ? (
+                <>
+                  <div className="cd" style={{ marginBottom: 12 }}>
+                    <div className="cdt">Positioning statement</div>
+                    <div style={{ fontSize: 13, color: "var(--t1)", lineHeight: 1.7, fontWeight: 300, padding: "10px 12px", background: "var(--in)", borderRadius: 8, border: "1px solid var(--in-b)" }}>
+                      {strategy.summary || strategy.messagingDirection || "Your positioning statement from the strategy agent."}
+                    </div>
+                  </div>
+                  {strategy.toneRecommendation && (
+                    <div className="cd" style={{ marginBottom: 12 }}>
+                      <div className="cdt">Tone of voice</div>
+                      <div className="tr">{(strategy.toneRecommendation as string).split(",").map((t: string) => <span key={t} className="tg">{t.trim()}</span>)}</div>
+                    </div>
+                  )}
+                  {strategy.keyMessages?.length > 0 && (
+                    <div className="cd">
+                      <div className="cdt">Key messages</div>
+                      <div className="tr">{strategy.keyMessages.map((m: string) => <span key={m} className="tg g">{m}</span>)}</div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div style={{ border: "1px dashed var(--in-b)", borderRadius: 10, padding: 32, textAlign: "center" }}>
+                  <i className="ti ti-flag-off" style={{ fontSize: 32, display: "block", marginBottom: 8, color: "var(--t4)" }} />
+                  <div style={{ fontSize: 12, color: "var(--t4)", fontWeight: 300 }}>No strategy sent to you yet</div>
+                </div>
+              )}
+            </div>
+            <div>
+              {!strategyApproved && strategy?.status !== "APPROVED" && strategy && (
+                <div className="cd" style={{ marginBottom: 12 }}>
+                  <div className="cdt">Your feedback</div>
+                  <div style={{ fontSize: 10, color: "var(--t4)", marginBottom: 8, fontWeight: 300 }}>Add a comment before approving</div>
+                  <textarea className="ea" placeholder="e.g. Please adjust the tone…" style={{ minHeight: 80, marginBottom: 10 }} />
+                  <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                    <button className="gb gbp" style={{ justifyContent: "center", padding: 10 }} onClick={approveStrategy}><i className="ti ti-check" />Approve strategy</button>
+                    <button className="gb gba" style={{ justifyContent: "center" }} onClick={() => { setRevisionContext("strategy"); setRevisionModal(true); }}><i className="ti ti-message" />Request changes</button>
+                  </div>
+                </div>
+              )}
+              <div className="cd">
+                <div className="cdt">Approval history</div>
+                {[{ label: "Strategy generated by AI", done: true }, { label: "Internal review by agency", done: true }, { label: "Client approval (you)", act: !strategyApproved && strategy?.status !== "APPROVED" }, { label: "Calendar generation unlocked", act: false }].map((a, i) => (
+                  <div key={i} className={`aps${a.done ? " done" : a.act ? " act" : ""}`}>
+                    <div className="apn">{a.done ? <i className="ti ti-check" style={{ fontSize: 8 }} /> : i + 1}</div>
+                    <div><div className="apt">{a.label}</div></div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
-      </nav>
+      )}
 
-      <main className="pt-28 pb-24 px-6 md:px-16 max-w-screen-xl mx-auto">
-
-        {/* Not linked state */}
-        {!loading && notLinked && (
-          <div className="min-h-[60vh] flex flex-col items-center justify-center text-center">
-            <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mb-6">
-              <Icon name="person_off" className="text-4xl text-primary/40" />
+      {/* ── Creative approvals ── */}
+      {activeTab === "creative" && (
+        <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+          <div style={{ padding: "10px 22px", borderBottom: "1px solid var(--tb-b)", display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+            <div style={{ display: "flex", gap: 4 }}>
+              {([["all", `All (${posts.length})`], ["pending", `Pending (${pendingPosts.length})`], ["approved", `Approved (${posts.filter((p) => p.status === "APPROVED").length})`]] as [string, string][]).map(([key, label]) => (
+                <span key={key} className={`flt${creativeFilter === key ? " act" : ""}`} style={{ cursor: "pointer" }} onClick={() => setCreativeFilter(key as any)}>{label}</span>
+              ))}
             </div>
-            <h2 className="font-headline text-2xl font-bold text-on-surface mb-2">Account not linked yet</h2>
-            <p className="text-on-surface-variant max-w-sm mb-1">
-              Your agency hasn&apos;t linked your portal account yet.
-            </p>
-            <p className="text-on-surface-variant/60 text-sm max-w-sm">
-              Make sure you signed up with the same email your agency registered for you. If this persists, contact your account manager.
-            </p>
+            <div style={{ marginLeft: "auto", fontSize: 11, color: "var(--t4)", fontWeight: 300 }}>June {TODAY.getFullYear()} · {posts.length} posts</div>
           </div>
-        )}
-
-        {/* Loading skeletons */}
-        {loading && (
-          <div className="space-y-6 mt-8">
-            <div className="h-32 bg-surface-container-lowest rounded-2xl animate-pulse" />
-            <div className="h-64 bg-surface-container-lowest rounded-2xl animate-pulse" />
+          <div className="sa">
+            <div className="g4" style={{ marginBottom: 4 }}>
+              {[["Pending review", pendingPosts.length, "var(--amber)"], ["Approved", posts.filter((p) => p.status === "APPROVED").length, "var(--green)"], ["Revision sent", posts.filter((p) => p.status === "REVISION_REQUIRED").length, "var(--blue)"], ["Published", posts.filter((p) => p.status === "PUBLISHED").length, undefined]].map(([label, val, color]) => (
+                <div key={label as string} className="mt"><div className="ml">{label as string}</div><div className="mv" style={{ color: (color as string) ?? undefined }}>{String(val)}</div></div>
+              ))}
+            </div>
+            <div className="g5" style={{ gap: 12, marginTop: 14 }}>
+              {(() => {
+                const shown = posts.filter((p) => creativeFilter === "all" ? true : creativeFilter === "pending" ? p.status === "AWAITING_APPROVAL" : p.status === "APPROVED");
+                if (shown.length === 0) return (
+                  <div style={{ gridColumn: "1/-1", textAlign: "center", padding: "48px 14px", color: "var(--t4)" }}>
+                    <i className="ti ti-photo-off" style={{ fontSize: 32, display: "block", marginBottom: 8 }} />
+                    <div style={{ fontSize: 12 }}>No creatives sent for approval yet</div>
+                  </div>
+                );
+                return shown.map((p) => (
+                  <div key={p.id} className="cd" style={{ padding: 0, overflow: "hidden" }}>
+                    <div className="cpv" style={{ borderRadius: 0, border: "none", minHeight: 130 }}>
+                      <div className="cpb">{p.platform?.toUpperCase() ?? "POST"}</div>
+                      <div className="cph" style={{ fontSize: 10 }}>{p.topic ?? p.hook ?? "Post"}</div>
+                      <div className="cps">{p.format} · {p.scheduledDate ? new Date(p.scheduledDate).toLocaleDateString("en", { month: "short", day: "numeric" }) : "—"}</div>
+                      <div className="cpbg">{p.status === "APPROVED" ? <i className="ti ti-check" style={{ fontSize: 9 }} /> : "Pending"}</div>
+                    </div>
+                    <div style={{ padding: 10 }}>
+                      <div style={{ fontSize: 10, fontWeight: 400, color: "var(--t2)", marginBottom: 2 }}>{p.topic ?? p.hook ?? "Post"}</div>
+                      <div style={{ fontSize: 9, color: "var(--t4)", marginBottom: 8 }}>{p.scheduledDate ? new Date(p.scheduledDate).toLocaleDateString("en", { month: "short", day: "numeric" }) : "—"} · {p.platform} · {p.format}</div>
+                      {p.status === "APPROVED" ? (
+                        <span className="pl plg" style={{ fontSize: 9 }}>Approved</span>
+                      ) : p.status === "REVISION_REQUIRED" ? (
+                        <span className="pl plr" style={{ fontSize: 9 }}>Revision sent</span>
+                      ) : (
+                        <div style={{ display: "flex", gap: 5 }}>
+                          <button className="gb gbs gbp" style={{ flex: 1, justifyContent: "center" }} onClick={() => approvePost(p)}><i className="ti ti-check" style={{ fontSize: 9 }} />Approve</button>
+                          <button className="gb gbs gbr" style={{ flex: 1, justifyContent: "center" }} onClick={() => { setRevisionContext("post"); setRevisionPost(p); setRevisionModal(true); }}><i className="ti ti-refresh" style={{ fontSize: 9 }} />Revise</button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ));
+              })()}
+            </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Main content */}
-        {!loading && client && (
-          <>
-            {/* Hero */}
-            <header className="mb-12">
-              <span className="text-[11px] uppercase tracking-[0.3em] text-primary font-semibold mb-3 block">
-                Your Campaign Portal
-              </span>
-              <h1 className="font-headline text-5xl md:text-6xl font-extrabold tracking-tighter text-primary leading-none mb-2">
-                {client.name}
-              </h1>
-              {(client.industry || client.platforms?.length) && (
-                <p className="text-on-surface-variant text-lg font-light">
-                  {client.industry || ""}{client.platforms?.length ? ` · ${client.platforms.join(", ")}` : ""}
-                </p>
-              )}
-            </header>
-
-            <div className="space-y-10">
-
-              {/* ── Strategy ── */}
-              {strategy ? (
-                <section>
-                  <div className="flex items-center gap-3 mb-5">
-                    <h2 className="text-2xl font-headline font-bold text-on-surface">Marketing Strategy</h2>
-                    {STATUS_LABEL[strategy.status] && (
-                      <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${STATUS_LABEL[strategy.status].color}`}>
-                        {STATUS_LABEL[strategy.status].label}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="bg-surface-container-lowest rounded-2xl overflow-hidden shadow-sm border border-outline-variant/10">
-                    <div className="p-8 md:p-10">
-
-                      {/* Summary */}
-                      {strategy.summary && (
-                        <div className="flex items-start gap-4 mb-8">
-                          <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                            <Icon name="auto_awesome" className="text-primary" />
-                          </div>
-                          <div>
-                            <h3 className="font-headline font-bold text-xl text-on-surface mb-2">Strategic Overview</h3>
-                            <p className="text-on-surface-variant leading-relaxed italic text-lg">
-                              &ldquo;{strategy.summary}&rdquo;
-                            </p>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Content Pillars */}
-                      {Array.isArray(strategy.contentPillars) && strategy.contentPillars.length > 0 && (
-                        <div className="mb-8">
-                          <h4 className="text-[11px] uppercase tracking-widest font-bold text-on-surface-variant mb-4">Content Pillars</h4>
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            {strategy.contentPillars.map((p: any, i: number) => (
-                              <div key={i} className="p-5 bg-surface-container rounded-xl">
-                                <h5 className="font-headline font-bold text-sm mb-1">{p.name}</h5>
-                                <p className="text-xs text-on-surface-variant leading-relaxed">{p.description}</p>
-                                {p.postsPerMonth && (
-                                  <p className="text-[10px] text-primary font-semibold mt-2 uppercase tracking-wide">{p.postsPerMonth} posts/mo</p>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Platform Strategy */}
-                      {Array.isArray(strategy.platformStrategy) && strategy.platformStrategy.length > 0 && (
-                        <div className="mb-8">
-                          <h4 className="text-[11px] uppercase tracking-widest font-bold text-on-surface-variant mb-4">Platform Strategy</h4>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {strategy.platformStrategy.map((p: any, i: number) => (
-                              <div key={i} className="p-5 bg-surface-container rounded-xl flex items-start gap-3">
-                                <Icon name={PLATFORM_ICON[p.platform?.toLowerCase()] || "share"} className="text-primary mt-0.5 shrink-0" />
-                                <div>
-                                  <p className="font-headline font-bold text-sm capitalize mb-1">{p.platform}</p>
-                                  <p className="text-xs text-on-surface-variant">{p.frequency || p.contentMix || ""}</p>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Tone */}
-                      {strategy.toneRecommendation && (
-                        <div className="mb-8 flex items-start gap-3 p-5 bg-primary/5 rounded-xl">
-                          <Icon name="record_voice_over" className="text-primary mt-0.5 shrink-0" />
-                          <div>
-                            <p className="text-[10px] uppercase tracking-widest font-bold text-primary mb-1">Voice &amp; Tone</p>
-                            <p className="text-sm text-on-surface-variant italic">{strategy.toneRecommendation}</p>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Approved state */}
-                      {strategy.status === "APPROVED" && (
-                        <div className="flex items-center gap-3 p-4 bg-emerald-50 rounded-xl border border-emerald-200 mb-4">
-                          <Icon name="check_circle" className="text-emerald-600 text-xl" />
-                          <p className="text-emerald-700 font-semibold text-sm">You&apos;ve approved this strategy. Your agency is now working on your content calendar.</p>
-                        </div>
-                      )}
-
-                      {/* Approval actions — only when pending */}
-                      {strategy.status === "SENT_TO_CLIENT" && (
-                        <>
-                          {showStrategyComment && (
-                            <textarea
-                              value={strategyComment}
-                              onChange={(e) => setStrategyComment(e.target.value)}
-                              placeholder="What would you like us to change or adjust?"
-                              className="w-full mb-5 bg-surface-container-low border-0 rounded-xl p-4 text-sm resize-none h-28 focus:ring-2 focus:ring-primary/30 outline-none"
-                            />
-                          )}
-                          <div className="flex flex-col sm:flex-row gap-3">
-                            <button
-                              onClick={() => handleStrategyApprove("APPROVED")}
-                              disabled={approvingStrategy}
-                              className="flex-1 flex items-center justify-center gap-2 py-4 px-8 bg-gradient-to-br from-primary to-primary-container text-white font-headline font-bold rounded-xl hover:opacity-90 transition-all active:scale-95 disabled:opacity-50"
-                            >
-                              {approvingStrategy ? (
-                                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                              ) : (
-                                <Icon name="check_circle" />
-                              )}
-                              Approve Strategy
-                            </button>
-                            <button
-                              onClick={() => {
-                                if (!showStrategyComment) { setShowStrategyComment(true); return; }
-                                handleStrategyApprove("CHANGES_REQUESTED");
-                              }}
-                              disabled={approvingStrategy}
-                              className="flex-1 flex items-center justify-center gap-2 py-4 px-8 border border-outline-variant/30 text-on-surface font-headline font-bold rounded-xl hover:bg-surface-container-low transition-colors disabled:opacity-50"
-                            >
-                              <Icon name="edit_note" />
-                              {showStrategyComment ? "Submit Feedback" : "Request Changes"}
-                            </button>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </section>
-              ) : (
-                !loading && (
-                  <div className="flex items-start gap-4 p-6 bg-surface-container-lowest rounded-2xl border border-outline-variant/10">
-                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                      <Icon name="hourglass_top" className="text-primary" />
-                    </div>
-                    <div>
-                      <p className="font-headline font-bold text-on-surface mb-1">Strategy in progress</p>
-                      <p className="text-on-surface-variant text-sm">Your agency is crafting your marketing strategy. You&apos;ll see it here once it&apos;s ready for your review.</p>
-                    </div>
-                  </div>
-                )
-              )}
-
-              {/* ── Content for Review ── */}
-              <section>
-                <div className="flex items-center gap-4 mb-5">
-                  <h2 className="text-2xl font-headline font-bold text-on-surface">Content for Review</h2>
-                  {posts.length > 0 && (
-                    <span className="px-3 py-1 bg-tertiary/10 text-tertiary rounded-full text-[10px] font-bold uppercase tracking-widest">
-                      {posts.length} post{posts.length !== 1 ? "s" : ""}
-                    </span>
-                  )}
+      {/* ── Content calendar ── */}
+      {activeTab === "calendar" && (
+        <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+          <div style={{ padding: "10px 22px", borderBottom: "1px solid var(--tb-b)", display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+            <select className="fs"><option>June {TODAY.getFullYear()}</option></select>
+            <div style={{ fontSize: 11, color: "var(--t3)", fontWeight: 300 }}>{posts.length} posts scheduled · Read-only</div>
+          </div>
+          <div className="sa">
+            <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
+              {[["var(--green)","Approved"],["var(--amber)","Pending approval"],["var(--red)","Revision requested"],["var(--blue)","Published"]].map(([color, label]) => (
+                <div key={label} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 9, color: "var(--t4)" }}>
+                  <div style={{ width: 7, height: 7, borderRadius: 2, background: color }} />{label}
                 </div>
-
-                {posts.length === 0 ? (
-                  <div className="text-center py-14 bg-surface-container-lowest rounded-2xl border border-outline-variant/10">
-                    <Icon name="fact_check" className="text-5xl text-primary/20 mb-4" />
-                    <p className="font-headline font-bold text-on-surface mb-1">All caught up</p>
-                    <p className="text-on-surface-variant text-sm">No posts are awaiting your review right now.</p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    {posts.map((post: any) => {
-                      const currentAsset = post.assets?.find((a: any) => a.isCurrent) || post.assets?.[0];
-                      return (
-                        <div key={post.id} className="bg-surface-container-lowest rounded-2xl overflow-hidden shadow-sm border border-outline-variant/10">
-                          <div className="aspect-video bg-surface-container relative">
-                            {currentAsset?.fileUrl ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img alt={post.topic} src={currentAsset.fileUrl} className="w-full h-full object-cover" />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center text-on-surface-variant/20">
-                                <Icon name="image" className="text-5xl" />
-                              </div>
-                            )}
-                            <div className="absolute top-4 left-4 flex items-center gap-1.5 bg-primary/90 text-white px-3 py-1 rounded-full">
-                              <Icon name={PLATFORM_ICON[post.platform] || "share"} className="text-sm" />
-                              <span className="text-[10px] font-bold uppercase tracking-widest">{post.platform}</span>
-                            </div>
-                          </div>
-                          <div className="p-7">
-                            <div className="flex items-start justify-between gap-3 mb-4">
-                              <h3 className="font-headline font-bold text-lg text-on-surface leading-tight">{post.topic}</h3>
-                              <span className="text-[10px] text-stone-400 shrink-0 mt-1">
-                                {post.scheduledDate
-                                  ? new Date(post.scheduledDate).toLocaleDateString("en", { month: "short", day: "numeric" })
-                                  : "TBD"}
-                              </span>
-                            </div>
-                            <div className="p-4 bg-surface rounded-xl border-l-4 border-primary/20 mb-4">
-                              <p className="text-sm text-on-surface italic leading-relaxed line-clamp-3">
-                                &ldquo;{post.caption}&rdquo;
-                              </p>
-                              {post.hashtags?.length > 0 && (
-                                <p className="text-primary text-xs mt-2">
-                                  {post.hashtags.slice(0, 5).map((h: string) => `#${h}`).join(" ")}
-                                </p>
-                              )}
-                            </div>
-                            <div className="flex gap-3">
-                              <button
-                                onClick={() => handlePostApprove(post.id, "APPROVED")}
-                                disabled={approvingPost === post.id}
-                                className="flex-1 flex items-center justify-center gap-2 py-3 bg-gradient-to-br from-primary to-primary-container text-white font-headline font-bold text-sm rounded-xl hover:opacity-90 transition-all active:scale-95 disabled:opacity-50"
-                              >
-                                {approvingPost === post.id ? (
-                                  <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                ) : (
-                                  <><Icon name="check" className="text-sm" /> Approve</>
-                                )}
-                              </button>
-                              <button
-                                onClick={() => handlePostApprove(post.id, "CHANGES_REQUESTED")}
-                                disabled={approvingPost === post.id}
-                                className="flex-1 flex items-center justify-center gap-2 py-3 border border-outline-variant/30 text-on-surface font-headline font-bold text-sm rounded-xl hover:bg-surface-container-low transition-colors disabled:opacity-50"
-                              >
-                                <Icon name="edit_note" className="text-sm" /> Revise
-                              </button>
-                            </div>
-                            <Link
-                              href={`/post-review?postId=${post.id}`}
-                              className="block text-center text-primary text-xs font-semibold mt-3 hover:underline"
-                            >
-                              View full detail →
-                            </Link>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </section>
+              ))}
             </div>
-          </>
-        )}
-      </main>
-    </>
+            <div className="cg">
+              {["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map((d) => <div key={d} className="dh">{d}</div>)}
+              {(() => {
+                const y = TODAY.getFullYear(), m = TODAY.getMonth();
+                const firstDay = new Date(y, m, 1).getDay();
+                const daysInMonth = new Date(y, m + 1, 0).getDate();
+                const offset = firstDay === 0 ? 6 : firstDay - 1;
+                const prevDays = new Date(y, m, 0).getDate();
+                const cells: { day: number; current: boolean; today: boolean }[] = [];
+                for (let i = offset - 1; i >= 0; i--) cells.push({ day: prevDays - i, current: false, today: false });
+                for (let d = 1; d <= daysInMonth; d++) cells.push({ day: d, current: true, today: d === TODAY.getDate() });
+                while (cells.length % 7 !== 0) cells.push({ day: cells.length - (offset + daysInMonth) + 1, current: false, today: false });
+                return cells.map((c, i) => {
+                  const dayPosts = c.current ? posts.filter((p) => p.scheduledDate && new Date(p.scheduledDate).getDate() === c.day && new Date(p.scheduledDate).getMonth() === m) : [];
+                  return (
+                    <div key={i} className={`dc${!c.current ? " om" : ""}${c.today ? " td" : ""}`}>
+                      <div className="dnw"><div className="dn">{c.day}</div></div>
+                      {dayPosts.slice(0, 2).map((p, j) => (
+                        <div key={j} className={`pc ${p.status === "APPROVED" ? "cbl" : p.status === "REVISION_REQUIRED" ? "caw" : "cof"}`}>
+                          <i className={`ti ti-brand-${p.platform}`} style={{ fontSize: 6 }} />{(p.format ?? "Post").slice(0, 6)}
+                        </div>
+                      ))}
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Reports ── */}
+      {activeTab === "reports" && (
+        <div className="sa">
+          <div className="g4" style={{ marginBottom: 16 }}>
+            {[["Total reach","142.8k",undefined],[" Engagement rate","4.7%","var(--green)"],["Posts published",posts.filter((p) => p.status === "PUBLISHED").length,undefined],["Followers gained","+284","var(--green)"]].map(([l,v,c]) => (
+              <div key={l as string} className="mt"><div className="ml">{l as string}</div><div className="mv" style={{ color: (c as string) ?? undefined }}>{String(v)}</div></div>
+            ))}
+          </div>
+          <div className="ibox" style={{ marginBottom: 14 }}>
+            <div className="ibt"><i className="ti ti-robot" style={{ fontSize: 12 }} />Monthly summary</div>
+            <div className="ibx">LinkedIn drove <strong style={{ fontWeight: 400, color: "var(--t1)" }}>72% of total reach</strong>. Your best performing format was <strong style={{ fontWeight: 400, color: "var(--t1)" }}>data-led carousels</strong> averaging 6.8% engagement. You are outperforming all 3 tracked competitors on engagement rate.</div>
+          </div>
+          <div className="g2e">
+            <div className="cd">
+              <div className="cdt">Engagement rate over time</div>
+              <svg className="csvg" viewBox="0 0 560 76" preserveAspectRatio="none">
+                <defs><linearGradient id="cpgf" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#34d97b" stopOpacity="0.18" /><stop offset="100%" stopColor="#34d97b" stopOpacity="0" /></linearGradient></defs>
+                <path d="M0,60 C80,50 160,40 240,34 C320,28 400,18 480,14 C510,12 540,10 560,8" fill="none" stroke="#34d97b" strokeWidth="1.5" strokeLinecap="round" />
+                <path d="M0,60 C80,50 160,40 240,34 C320,28 400,18 480,14 C510,12 540,10 560,8 L560,72 L0,72Z" fill="url(#cpgf)" />
+              </svg>
+            </div>
+            <div className="cd">
+              <div className="cdt">Reach by platform</div>
+              {[{label:"LinkedIn",icon:"ti-brand-linkedin",color:"#0077b5",reach:"102k",pct:72},{label:"Instagram",icon:"ti-brand-instagram",color:"#e1306c",reach:"40k",pct:28}].map((p) => (
+                <div key={p.label} className="hbr"><div className="hbl"><i className={`ti ${p.icon}`} style={{ fontSize: 11, color: p.color }} />{p.label}</div><div className="hbt"><div className="hbf" style={{ width: `${p.pct}%`, background: p.color }} /></div><div className="hbv">{p.reach}</div></div>
+              ))}
+            </div>
+          </div>
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
+            <button className="gb gbg"><i className="ti ti-download" />Download PDF report</button>
+          </div>
+        </div>
+      )}
+
+      {/* Revision modal */}
+      {revisionModal && (
+        <div className="mo" onClick={(e) => { if (e.target === e.currentTarget) setRevisionModal(false); }}>
+          <div className="mb">
+            <div className="mbt">Request changes</div>
+            <div className="mbs">Describe what you&apos;d like changed. Your agency will be notified immediately.</div>
+            <div className="fl" style={{ marginBottom: 12 }}><label>What needs to change?</label><textarea style={{ minHeight: 80 }} placeholder="e.g. Please make the headline more direct…" value={revisionComment} onChange={(e) => setRevisionComment(e.target.value)} /></div>
+            <div className="fl" style={{ marginBottom: 16 }}><label>Priority</label><select><option>Normal</option><option>High — needed before publish date</option></select></div>
+            <div className="mbb">
+              <button className="gb gbg" onClick={() => { setRevisionModal(false); setRevisionComment(""); setRevisionPost(null); }}>Cancel</button>
+              <button className="gb gba" onClick={handleRevision}><i className="ti ti-send" />Send revision request</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Approved modal */}
+      {approvedModal && (
+        <div className="mo" onClick={(e) => { if (e.target === e.currentTarget) setApprovedModal(false); }}>
+          <div className="mb" style={{ textAlign: "center", maxWidth: 360 }}>
+            <div style={{ width: 50, height: 50, borderRadius: "50%", background: "var(--gb)", border: "2px solid var(--gbb)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px" }}>
+              <i className="ti ti-check" style={{ fontSize: 22, color: "var(--green)" }} />
+            </div>
+            <div className="mbt">Strategy approved!</div>
+            <div className="mbs">Your agency has been notified. They&apos;ll proceed with generating the content calendar.</div>
+            <div className="mbb" style={{ justifyContent: "center" }}>
+              <button className="gb gbp" onClick={() => { setApprovedModal(false); setActiveTab("calendar"); }}><i className="ti ti-calendar" />View calendar</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </ClientPortalLayout>
   );
 }

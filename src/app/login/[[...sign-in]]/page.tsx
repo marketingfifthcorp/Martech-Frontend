@@ -2,84 +2,105 @@ import { SignIn } from "@clerk/nextjs";
 
 export default function LoginPage() {
   return (
-    <div className="min-h-screen flex">
-      {/* Left — brand panel */}
-      <div className="hidden lg:flex flex-col justify-between w-[480px] bg-primary p-16 relative overflow-hidden">
-        <div className="relative z-10">
-          <span className="text-primary-fixed text-[10px] uppercase tracking-[0.4em] font-semibold">
-            Atelier Martech
-          </span>
+    <div
+      className="dark"
+      style={{
+        width: "100%",
+        height: "100%",
+        background: "var(--bg)",
+        display: "flex",
+        overflow: "hidden",
+        position: "relative",
+      }}
+    >
+      {/* Decorative orbs */}
+      <div style={{ position: "absolute", top: -80, right: -60, width: 320, height: 320, background: "radial-gradient(circle,var(--orb1),transparent 70%)", pointerEvents: "none", zIndex: 0 }} />
+      <div style={{ position: "absolute", bottom: -60, left: 80, width: 280, height: 280, background: "radial-gradient(circle,var(--orb2),transparent 70%)", pointerEvents: "none", zIndex: 0 }} />
+
+      {/* Left brand panel */}
+      <div
+        style={{
+          width: 420,
+          minWidth: 420,
+          background: "var(--sb)",
+          borderRight: "1px solid var(--sb-b)",
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "space-between",
+          padding: "48px 40px",
+          position: "relative",
+          zIndex: 1,
+          backdropFilter: "blur(24px)",
+        }}
+      >
+        <div>
+          <div style={{ fontSize: 20, fontWeight: 300, letterSpacing: ".32em", color: "var(--green)", marginBottom: 4 }}>ZŸR</div>
+          <div style={{ fontSize: 9, color: "var(--t4)", letterSpacing: ".14em", fontWeight: 300 }}>Marketing OS</div>
         </div>
-        <div className="relative z-10 space-y-8">
-          <h1 className="text-white font-headline text-5xl font-extrabold tracking-tighter leading-tight">
+
+        <div>
+          <div style={{ fontSize: 32, fontWeight: 300, color: "var(--t1)", lineHeight: 1.25, marginBottom: 16, letterSpacing: "-.02em" }}>
             The Digital Curator<br />for Agencies.
-          </h1>
-          <p className="text-primary-fixed-dim text-lg font-light leading-relaxed">
+          </div>
+          <div style={{ fontSize: 13, color: "var(--t3)", lineHeight: 1.7, fontWeight: 300, marginBottom: 32 }}>
             AI-powered strategy. Seamless collaboration. Automated publishing — all in one platform built for modern marketing agencies.
-          </p>
-          <div className="grid grid-cols-3 gap-6 pt-4">
-            {[
-              { label: "Clients", value: "2.4K+" },
-              { label: "Posts Published", value: "180K+" },
-              { label: "Agencies", value: "340+" },
-            ].map((stat) => (
-              <div key={stat.label}>
-                <div className="text-white font-headline font-bold text-2xl">{stat.value}</div>
-                <div className="text-primary-fixed-dim text-xs uppercase tracking-widest mt-1">{stat.label}</div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16, marginBottom: 32 }}>
+            {[{ label: "Clients", value: "2.4K+" }, { label: "Posts published", value: "180K+" }, { label: "Agencies", value: "340+" }].map((s) => (
+              <div key={s.label}>
+                <div style={{ fontSize: 22, fontWeight: 300, color: "var(--green)", letterSpacing: "-.02em" }}>{s.value}</div>
+                <div style={{ fontSize: 9, color: "var(--t4)", textTransform: "uppercase", letterSpacing: ".1em", marginTop: 3, fontWeight: 300 }}>{s.label}</div>
               </div>
             ))}
           </div>
         </div>
-        <div className="absolute -right-20 -bottom-20 w-96 h-96 bg-primary-container/30 rounded-full blur-3xl" />
 
-        {/* Status */}
-        <div className="relative z-10 border border-white/10 rounded-xl p-5 space-y-3">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-primary-fixed animate-pulse" />
-            <span className="text-[10px] uppercase tracking-widest text-primary-fixed/70 font-semibold">
-              Platform Status
-            </span>
+        {/* Platform status */}
+        <div style={{ background: "var(--in)", border: "1px solid var(--in-b)", borderRadius: 12, padding: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 12 }}>
+            <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--green)" }} />
+            <span style={{ fontSize: 9, color: "var(--t4)", textTransform: "uppercase", letterSpacing: ".1em", fontWeight: 300 }}>Platform status</span>
           </div>
-          {[
-            { label: "Strategy Engine", status: "Operational" },
-            { label: "Publishing Queue", status: "Operational" },
-            { label: "AI Agents", status: "Operational" },
-          ].map((item) => (
-            <div key={item.label} className="flex justify-between items-center text-xs">
-              <span className="text-primary-fixed/60">{item.label}</span>
-              <span className="text-primary-fixed font-semibold">{item.status}</span>
+          {[["Strategy engine","Operational"],["Publishing queue","Operational"],["AI agents","Operational"]].map(([label, status]) => (
+            <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0", fontSize: 11, fontWeight: 300 }}>
+              <span style={{ color: "var(--t4)" }}>{label}</span>
+              <span style={{ color: "var(--green)" }}>{status}</span>
             </div>
           ))}
         </div>
       </div>
 
       {/* Right — Clerk sign-in */}
-      <div className="flex-1 flex items-center justify-center p-8 bg-surface">
-        <div className="w-full max-w-md">
-          <div className="mb-10">
-            <p className="text-[11px] uppercase tracking-[0.3em] text-primary font-semibold mb-3">
-              Platform Access
-            </p>
-            <h2 className="text-4xl font-headline font-extrabold tracking-tight text-on-surface">
-              Welcome back.
-            </h2>
-            <p className="mt-2 text-on-surface-variant text-sm">
-              Sign in to your workspace
-            </p>
+      <div
+        style={{
+          flex: 1,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 32,
+          position: "relative",
+          zIndex: 1,
+        }}
+      >
+        <div style={{ width: "100%", maxWidth: 420 }}>
+          <div style={{ marginBottom: 28 }}>
+            <div style={{ fontSize: 9, color: "var(--green)", textTransform: "uppercase", letterSpacing: ".14em", marginBottom: 8, fontWeight: 300 }}>Platform access</div>
+            <div style={{ fontSize: 28, fontWeight: 300, color: "var(--t1)", letterSpacing: "-.02em" }}>Welcome back.</div>
+            <div style={{ fontSize: 12, color: "var(--t3)", marginTop: 4, fontWeight: 300 }}>Sign in to your workspace</div>
           </div>
           <SignIn
             appearance={{
               elements: {
                 rootBox: "w-full",
-                card: "shadow-none p-9 bg-transparent",
+                card: "shadow-none bg-transparent",
                 headerTitle: "hidden",
                 headerSubtitle: "hidden",
                 socialButtonsBlockButton:
                   "border border-outline-variant/30 rounded-md hover:bg-surface-container-low transition-colors",
                 formFieldInput:
-                  "bg-surface-container-low border-0 rounded-md text-sm focus:ring-2 focus:ring-primary/30 focus:bg-white transition-all",
+                  "bg-surface-container-low border-0 rounded-md text-sm focus:ring-2 focus:ring-primary/30 transition-all",
                 formButtonPrimary:
-                  "bg-primary hover:bg-primary-container text-white font-headline font-bold rounded-md shadow-lg",
+                  "bg-primary hover:bg-primary-container text-white font-bold rounded-md",
                 footerActionLink: "text-primary hover:underline",
               },
             }}

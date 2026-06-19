@@ -6,40 +6,50 @@ import { TopBar } from "./TopBar";
 
 type DashboardShellProps = {
   children: React.ReactNode;
-  searchPlaceholder?: string;
+  title?: string;
+  /** @deprecated use title instead */
   contextLabel?: string;
+  breadcrumb?: React.ReactNode;
+  actionButton?: React.ReactNode;
 };
 
 export function DashboardShell({
   children,
-  searchPlaceholder,
+  title,
   contextLabel,
+  breadcrumb,
+  actionButton,
 }: DashboardShellProps) {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const pageTitle = title ?? contextLabel;
+  const [collapsed, setCollapsed] = useState(false);
 
   return (
-    <>
-      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+    <div
+      style={{
+        width: "100%",
+        height: "100%",
+        background: "var(--bg)",
+        display: "flex",
+        flexDirection: "row",
+        overflow: "hidden",
+        position: "relative",
+      }}
+    >
+      {/* Ambient orb decorations */}
+      <div style={{ position: "absolute", top: -80, right: -60, width: 320, height: 320, background: "radial-gradient(circle,var(--orb1),transparent 70%)", pointerEvents: "none", zIndex: 0 }} />
+      <div style={{ position: "absolute", bottom: -60, left: 80, width: 280, height: 280, background: "radial-gradient(circle,var(--orb2),transparent 70%)", pointerEvents: "none", zIndex: 0 }} />
 
-      {/* Mobile overlay */}
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black/40 z-30 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
+      <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((v) => !v)} />
 
-      <main className="lg:ml-64 min-h-screen">
+      <div style={{ flex: 1, height: "100%", display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0, position: "relative", zIndex: 1 }}>
         <TopBar
-          searchPlaceholder={searchPlaceholder}
-          contextLabel={contextLabel}
-          onMenuClick={() => setSidebarOpen((v) => !v)}
+          title={pageTitle}
+          breadcrumb={breadcrumb}
+          actionButton={actionButton}
+          onToggleSidebar={() => setCollapsed((v) => !v)}
         />
-        <div className="pt-16">{children}</div>
-      </main>
-
-      <div className="fixed top-0 right-0 w-[600px] h-[600px] bg-primary/5 rounded-full blur-[120px] -z-10 pointer-events-none" />
-      <div className="fixed bottom-0 left-0 w-[400px] h-[400px] bg-secondary-container/10 rounded-full blur-[100px] -z-10 pointer-events-none" />
-    </>
+        {children}
+      </div>
+    </div>
   );
 }

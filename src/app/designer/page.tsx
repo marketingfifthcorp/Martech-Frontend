@@ -1,30 +1,28 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import { DashboardShell } from "@/components/layout/DashboardShell";
-import { Icon } from "@/components/ui/Icon";
 import { useApi } from "@/hooks/useApi";
 import { useRoleGuard } from "@/hooks/useRoleGuard";
-import { useToast } from "@/components/ui/Toast";
 
-const PLATFORM_ICON: Record<string, string> = {
-  instagram: "camera",
-  linkedin: "work",
-  tiktok: "music_video",
-  x: "tag",
+const TODAY = new Date();
+
+const DESIGN_STATUSES = ["DRAFT", "IN_DESIGN", "CREATIVE_UPLOADED", "AWAITING_APPROVAL", "REVISION_REQUIRED"];
+
+const STATUS_FILTER: Record<string, string[]> = {
+  all: DESIGN_STATUSES,
+  pending: ["DRAFT", "IN_DESIGN"],
+  review: ["CREATIVE_UPLOADED", "AWAITING_APPROVAL"],
+  revision: ["REVISION_REQUIRED"],
 };
-
-const DESIGN_STATUSES = ["DRAFT", "IN_DESIGN", "CREATIVE_UPLOADED", "REVISION_REQUIRED"];
 
 export default function DesignerPage() {
   const api = useApi();
-  const toast = useToast();
   const { checking } = useRoleGuard(["DESIGNER", "ADMIN"]);
 
   const [posts, setPosts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<string>("ALL");
+  const [filter, setFilter] = useState("all");
   const [uploading, setUploading] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadTargetRef = useRef<string | null>(null);
@@ -34,25 +32,22 @@ export default function DesignerPage() {
     (async () => {
       try {
         const clients = await api.clients.list();
-        const postArrays = await Promise.all(
+        const arrays = await Promise.all(
           clients.map((c: any) => api.posts.listByClient(c.id).catch(() => []))
         );
-        const all = postArrays.flat().filter((p: any) => DESIGN_STATUSES.includes(p.status));
-        // Attach client name from the clients list
         const clientMap = Object.fromEntries(clients.map((c: any) => [c.id, c]));
-        const enriched = all.map((p: any) => ({
-          ...p,
-          clientName: clientMap[p.project?.clientId]?.name || "—",
-        }));
-        enriched.sort((a: any, b: any) =>
-          new Date(a.scheduledDate || 0).getTime() - new Date(b.scheduledDate || 0).getTime()
-        );
-        setPosts(enriched);
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoading(false);
-      }
+        const all = arrays.flat()
+          .filter((p: any) => DESIGN_STATUSES.includes(p.status))
+          .map((p: any) => ({
+            ...p,
+            clientName: clientMap[p.project?.clientId]?.name ?? "—",
+          }))
+          .sort((a: any, b: any) =>
+            new Date(a.scheduledDate ?? 0).getTime() - new Date(b.scheduledDate ?? 0).getTime()
+          );
+        setPosts(all);
+      } catch {}
+      finally { setLoading(false); }
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [checking]);
@@ -64,12 +59,10 @@ export default function DesignerPage() {
     setUploading(postId);
     try {
       await api.assets.upload(postId, file, "");
-      // Refresh the post in the list
       const updated = await api.posts.get(postId);
-      setPosts((prev) => prev.map((p) => (p.id === postId ? { ...p, ...updated, clientName: p.clientName } : p)));
-    } catch (e: any) {
-      toast.error("Upload failed", e.message);
-    } finally {
+      setPosts((prev) => prev.map((p) => p.id === postId ? { ...p, ...updated, clientName: p.clientName } : p));
+    } catch {}
+    finally {
       setUploading(null);
       uploadTargetRef.current = null;
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -81,216 +74,181 @@ export default function DesignerPage() {
     fileInputRef.current?.click();
   }
 
-  if (checking) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-surface">
-        <div className="w-8 h-8 border-2 border-primary/20 border-t-primary rounded-full animate-spin" />
-      </div>
-    );
+  if (checking) return (
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#0f0f1a" }}>
+      <div style={{ width: 32, height: 32, border: "2px solid rgba(52,217,123,.2)", borderTopColor: "#34d97b", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
+    </div>
+  );
+
+  const needsUpload = posts.filter((p) => ["DRAFT","IN_DESIGN"].includes(p.status)).length;
+  const revisions = posts.filter((p) => p.status === "REVISION_REQUIRED").length;
+  const submitted = posts.filter((p) => ["CREATIVE_UPLOADED","AWAITING_APPROVAL"].includes(p.status)).length;
+
+  const filtered = filter === "all"
+    ? posts
+    : posts.filter((p) => STATUS_FILTER[filter]?.includes(p.status));
+
+  function pillCls(status: string) {
+    if (status === "REVISION_REQUIRED") return "plr";
+    if (["CREATIVE_UPLOADED","AWAITING_APPROVAL"].includes(status)) return "plb";
+    return "pla";
   }
 
-  const platforms = ["ALL", ...Array.from(new Set(posts.map((p) => p.platform)))];
-  const filtered = filter === "ALL" ? posts : posts.filter((p) => p.platform === filter);
-
-  const needsUpload = posts.filter((p) => ["DRAFT", "IN_DESIGN"].includes(p.status)).length;
-  const revisions = posts.filter((p) => p.status === "REVISION_REQUIRED").length;
-  const uploaded = posts.filter((p) => p.status === "CREATIVE_UPLOADED").length;
+  function isOverdue(p: any) {
+    return p.scheduledDate && new Date(p.scheduledDate) < TODAY;
+  }
 
   return (
-    <DashboardShell contextLabel="Design Studio">
+    <DashboardShell
+      title="Design workspace"
+      actionButton={
+        <button className="gb gbp" onClick={() => fileInputRef.current?.click()}>
+          <i className="ti ti-upload" /> Upload creative
+        </button>
+      }
+    >
       {/* Hidden file input */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*,video/*"
-        className="hidden"
-        onChange={handleFileChange}
-      />
+      <input ref={fileInputRef} type="file" accept="image/*,video/*" style={{ display: "none" }} onChange={handleFileChange} />
 
-      <div className="p-8 md:p-12 max-w-7xl mx-auto">
-
-        {/* Header */}
-        <div className="mb-12">
-          <span className="text-[11px] uppercase tracking-[0.3em] text-primary font-semibold mb-2 block">
-            Designer Portal
-          </span>
-          <h1 className="text-4xl font-headline font-extrabold tracking-tight text-on-surface mb-2">
-            Design Studio
-          </h1>
-          <p className="text-on-surface-variant text-sm">
-            Your creative work queue — upload assets for each post below.
-          </p>
+      <div style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
+        {/* Filter tabs */}
+        <div style={{ padding: "8px 22px", borderBottom: "1px solid var(--tb-b)", display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
+          <span className={`flt${filter === "all" ? " act" : ""}`} onClick={() => setFilter("all")}>All ({posts.length})</span>
+          <span className={`flt${filter === "pending" ? " act" : ""}`} onClick={() => setFilter("pending")}>Awaiting upload ({needsUpload})</span>
+          <span className={`flt${filter === "review" ? " act" : ""}`} onClick={() => setFilter("review")}>In review ({submitted})</span>
+          <span className={`flt${filter === "revision" ? " act" : ""}`} onClick={() => setFilter("revision")}>Revision needed ({revisions})</span>
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-5 mb-10">
-          {[
-            { label: "Needs Upload", value: needsUpload, color: "text-primary", icon: "upload" },
-            { label: "Revisions", value: revisions, color: "text-error", icon: "edit_note" },
-            { label: "Uploaded", value: uploaded, color: "text-tertiary", icon: "check_circle" },
-            { label: "Total Open", value: posts.length, color: "text-on-surface", icon: "dashboard" },
-          ].map((s) => (
-            <div key={s.label} className="bg-surface-container-lowest rounded-xl p-5 border border-outline-variant/10 shadow-sm">
-              <div className="flex items-center gap-2 mb-3">
-                <Icon name={s.icon} className={`text-lg ${s.color}`} />
-                <span className="text-[10px] uppercase tracking-widest text-on-surface-variant font-semibold">{s.label}</span>
-              </div>
-              <span className={`text-3xl font-headline font-bold ${s.color}`}>
-                {loading ? "—" : s.value}
-              </span>
+        {/* Stats bar */}
+        <div className="sbar" style={{ gridTemplateColumns: "repeat(4,1fr)" }}>
+          <div className="sc2"><div className="sv" style={{ color: "var(--amber)" }}>{loading ? "—" : needsUpload}</div><div className="sl2">Awaiting upload</div></div>
+          <div className="sc2"><div className="sv" style={{ color: "var(--red)" }}>{loading ? "—" : revisions}</div><div className="sl2">Revisions</div></div>
+          <div className="sc2"><div className="sv" style={{ color: "var(--blue)" }}>{loading ? "—" : submitted}</div><div className="sl2">In review</div></div>
+          <div className="sc2"><div className="sv">{loading ? "—" : posts.length}</div><div className="sl2">Total open</div></div>
+        </div>
+
+        {/* Brief cards */}
+        <div style={{ flex: 1, overflowY: "auto" }}>
+          {loading ? (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 200 }}>
+              <div style={{ width: 28, height: 28, border: "2px solid rgba(52,217,123,.2)", borderTopColor: "#34d97b", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
             </div>
-          ))}
-        </div>
+          ) : filtered.length === 0 ? (
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "60px 22px", textAlign: "center" }}>
+              <i className="ti ti-circle-check" style={{ fontSize: 40, color: "var(--green)", display: "block", marginBottom: 12 }} />
+              <div style={{ fontSize: 14, color: "var(--t2)", marginBottom: 4 }}>{posts.length === 0 ? "No work in queue" : "Nothing in this filter"}</div>
+              <div style={{ fontSize: 11, color: "var(--t4)", fontWeight: 300 }}>{posts.length === 0 ? "Posts appear here once the admin generates a content calendar." : "Adjust the filters above."}</div>
+            </div>
+          ) : (
+            <div className="sa">
+              {filtered.map((p) => {
+                const isRevision = p.status === "REVISION_REQUIRED";
+                const overdue = isOverdue(p);
+                const currentAsset = p.assets?.find((a: any) => a.isCurrent) ?? p.assets?.[0];
+                const revisionNote = isRevision && p.approvals?.length > 0
+                  ? p.approvals[p.approvals.length - 1]?.comment ?? "Please revise."
+                  : null;
 
-        {/* Platform filter */}
-        {!loading && posts.length > 0 && (
-          <div className="flex gap-2 mb-8 flex-wrap">
-            {platforms.map((p) => (
-              <button
-                key={p}
-                onClick={() => setFilter(p)}
-                className={`px-4 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-widest transition-all
-                  ${filter === p
-                    ? "bg-primary text-white shadow-sm"
-                    : "bg-surface-container-low text-on-surface-variant hover:bg-surface-container"}`}
-              >
-                {p}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Post grid */}
-        {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[1, 2, 3, 4, 5, 6].map((i) => (
-              <div key={i} className="bg-surface-container-lowest rounded-2xl p-6 animate-pulse h-64" />
-            ))}
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24 text-center">
-            <Icon name="check_circle" className="text-6xl text-primary/20 mb-6" />
-            <h3 className="text-xl font-headline font-bold text-on-surface mb-2">
-              {posts.length === 0 ? "No work in queue" : "Nothing in this filter"}
-            </h3>
-            <p className="text-on-surface-variant text-sm max-w-sm">
-              {posts.length === 0
-                ? "Posts will appear here once the admin generates a content calendar."
-                : "Switch the filter to see other posts."}
-            </p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filtered.map((post: any) => {
-              const isRevision = post.status === "REVISION_REQUIRED";
-              const isUploaded = post.status === "CREATIVE_UPLOADED";
-              const currentAsset = post.assets?.find((a: any) => a.isCurrent) || post.assets?.[0];
-
-              return (
-                <div
-                  key={post.id}
-                  className={`bg-surface-container-lowest rounded-2xl overflow-hidden shadow-sm border transition-all hover:-translate-y-0.5 hover:shadow-md
-                    ${isRevision ? "border-error/20" : "border-outline-variant/10"}`}
-                >
-                  {/* Asset preview */}
-                  <div className="aspect-video bg-surface-container relative">
-                    {currentAsset?.fileUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        alt={post.topic}
-                        src={currentAsset.fileUrl}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-on-surface-variant/20">
-                        <Icon name="image" className="text-5xl" />
+                return (
+                  <div key={p.id} className="brc" data-status={isRevision ? "revision" : undefined}>
+                    <div className="brch">
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <div style={{ width: 36, height: 36, borderRadius: 8, background: "var(--in)", border: "1px solid var(--in-b)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "var(--t3)", flexShrink: 0 }}>
+                          {(p.clientName ?? "").split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase()}
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 400, color: "var(--t1)" }}>{p.topic ?? p.hook ?? "Post"}</div>
+                          <div style={{ fontSize: 10, color: "var(--t4)", marginTop: 1 }}>{p.clientName} · {p.objective ?? p.format ?? ""}</div>
+                        </div>
                       </div>
-                    )}
-                    {/* Status badge */}
-                    <div className="absolute top-3 left-3">
-                      <span className={`px-2.5 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest
-                        ${isRevision ? "bg-error/90 text-white" :
-                          isUploaded ? "bg-emerald-600/90 text-white" :
-                          "bg-primary/90 text-white"}`}>
-                        {post.status.replace(/_/g, " ")}
-                      </span>
-                    </div>
-                    {/* Platform badge */}
-                    <div className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/90 flex items-center justify-center shadow-sm">
-                      <Icon name={PLATFORM_ICON[post.platform] || "share"} className="text-primary text-sm" />
-                    </div>
-                  </div>
-
-                  {/* Content */}
-                  <div className="p-5">
-                    <div className="flex items-start justify-between gap-2 mb-2">
-                      <div>
-                        <p className="text-[10px] text-on-surface-variant uppercase tracking-widest font-semibold">
-                          {post.clientName}
-                        </p>
-                        <h3 className="font-headline font-bold text-sm text-on-surface line-clamp-1 mt-0.5">
-                          {post.topic}
-                        </h3>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span className={`pl ${pillCls(p.status)}`}>{p.status?.replace(/_/g, " ")}</span>
+                        {overdue
+                          ? <div style={{ fontSize: 10, color: "var(--red)", fontWeight: 300 }}><i className="ti ti-alert-circle" style={{ fontSize: 9 }} /> Overdue</div>
+                          : p.scheduledDate && <div style={{ fontSize: 10, color: "var(--t4)", fontWeight: 300 }}>Due {new Date(p.scheduledDate).toLocaleDateString("en", { month: "short", day: "numeric" })}</div>
+                        }
                       </div>
-                      <span className="text-[10px] text-stone-400 shrink-0">
-                        {post.scheduledDate
-                          ? new Date(post.scheduledDate).toLocaleDateString("en", { month: "short", day: "numeric" })
-                          : "—"}
-                      </span>
                     </div>
-
-                    {/* Creative direction */}
-                    {post.creativeNote && (
-                      <div className="mb-4 p-3 bg-surface-container rounded-lg">
-                        <p className="text-[10px] uppercase tracking-widest font-bold text-primary mb-1">Creative Brief</p>
-                        <p className="text-xs text-on-surface-variant leading-relaxed line-clamp-3 italic">{post.creativeNote}</p>
+                    <div className="brd">
+                      <div className="bri">
+                        <div className="bril">Format</div><div className="briv">{p.format ?? "—"}</div>
+                        <div className="bril">Platform</div><div className="briv">{p.platform ? p.platform.charAt(0).toUpperCase() + p.platform.slice(1) : "—"}</div>
+                        <div className="bril">Publish date</div><div className="briv">{p.scheduledDate ? new Date(p.scheduledDate).toLocaleDateString("en", { month: "short", day: "numeric" }) : "—"}</div>
+                        <div className="bril">Status</div><div className="briv" style={{ color: isRevision ? "var(--red)" : overdue ? "var(--red)" : "var(--t2)" }}>
+                          {isRevision ? "Revision needed" : p.status?.replace(/_/g, " ")}
+                        </div>
                       </div>
-                    )}
 
-                    {/* Revision notes */}
-                    {isRevision && post.approvals?.length > 0 && (
-                      <div className="mb-4 p-3 bg-error/5 rounded-lg border border-error/20">
-                        <p className="text-[10px] uppercase tracking-widest font-bold text-error mb-1">Revision Requested</p>
-                        <p className="text-xs text-on-surface-variant leading-relaxed line-clamp-2">
-                          {post.approvals[post.approvals.length - 1]?.comment || "See full post for details."}
-                        </p>
-                      </div>
-                    )}
+                      {/* Creative brief */}
+                      {p.creativeNote && (
+                        <div className="brb">
+                          <div className="bril" style={{ marginBottom: 4 }}>Creative brief</div>
+                          <div style={{ background: "var(--in)", border: "1px solid var(--in-b)", borderRadius: 8, padding: "10px 12px", fontSize: 10, color: "var(--t3)", lineHeight: 1.7, fontWeight: 300 }}>
+                            {p.creativeNote}
+                          </div>
+                        </div>
+                      )}
 
-                    {/* Format pill */}
-                    <div className="flex items-center gap-2 mb-4">
-                      <span className="px-2 py-0.5 bg-secondary-container text-on-secondary-container text-[10px] font-bold rounded uppercase tracking-wide">
-                        {post.format}
-                      </span>
-                      <span className="text-[10px] text-on-surface-variant uppercase tracking-wide">{post.objective}</span>
-                    </div>
+                      {/* Caption */}
+                      {p.caption && (
+                        <div className="brb">
+                          <div className="bril" style={{ marginBottom: 4 }}>Caption</div>
+                          <div style={{ background: "var(--in)", border: "1px solid var(--in-b)", borderRadius: 8, padding: "10px 12px", fontSize: 10, color: "var(--t3)", lineHeight: 1.7, fontWeight: 300 }}>
+                            {p.caption}
+                          </div>
+                        </div>
+                      )}
 
-                    {/* Actions */}
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => triggerUpload(post.id)}
-                        disabled={uploading === post.id}
-                        className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-gradient-to-br from-primary to-primary-container text-white rounded-lg text-[11px] font-bold uppercase tracking-widest transition-all hover:opacity-90 active:scale-95 disabled:opacity-50"
-                      >
-                        {uploading === post.id ? (
-                          <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      {/* Revision note */}
+                      {revisionNote && (
+                        <div className="brb">
+                          <div className="bril" style={{ marginBottom: 4, color: "var(--red)" }}>Revision notes</div>
+                          <div style={{ background: "rgba(255,107,107,.06)", border: "1px solid rgba(255,107,107,.2)", borderRadius: 8, padding: "10px 12px", fontSize: 10, color: "var(--t2)", lineHeight: 1.7, fontWeight: 300 }}>
+                            {revisionNote}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* In review state */}
+                      {["CREATIVE_UPLOADED","AWAITING_APPROVAL"].includes(p.status) && (
+                        <div style={{ background: "rgba(107,159,255,.06)", border: "1px solid rgba(107,159,255,.2)", borderRadius: 8, padding: "9px 12px", fontSize: 10, color: "var(--blue)", fontWeight: 300, marginBottom: 12 }}>
+                          <i className="ti ti-clock" style={{ fontSize: 9 }} /> Submitted · Under review by account manager
+                        </div>
+                      )}
+
+                      {/* Upload area */}
+                      <div className="bru">
+                        {currentAsset?.fileUrl ? (
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={currentAsset.fileUrl} alt="" style={{ width: 48, height: 48, objectFit: "cover", borderRadius: 6, border: "1px solid var(--card-b)" }} />
+                            <div style={{ fontSize: 10, color: "var(--t4)", fontWeight: 300 }}>Current file uploaded</div>
+                          </div>
                         ) : (
-                          <><Icon name="upload" className="text-sm" /> {currentAsset ? "Replace" : "Upload"}</>
+                          <div className="brud">
+                            <i className="ti ti-cloud-upload" style={{ fontSize: 22, color: "var(--t4)", marginBottom: 6 }} />
+                            <div style={{ fontSize: 11, color: "var(--t3)", fontWeight: 300 }}>Drag &amp; drop file or <span style={{ color: "var(--green)", cursor: "pointer" }} onClick={() => triggerUpload(p.id)}>browse</span></div>
+                            <div style={{ fontSize: 9, color: "var(--t4)", marginTop: 3 }}>MP4, MOV, PNG, JPG · max 200MB</div>
+                          </div>
                         )}
-                      </button>
-                      <Link
-                        href={`/post-review?postId=${post.id}`}
-                        className="px-3 py-2.5 border border-outline-variant/30 rounded-lg text-on-surface hover:bg-surface-container-low transition-colors flex items-center justify-center"
-                      >
-                        <Icon name="open_in_new" className="text-sm" />
-                      </Link>
+                        <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                          <button className="gb gbg" style={{ fontSize: 10 }} onClick={() => triggerUpload(p.id)} disabled={uploading === p.id}>
+                            <i className="ti ti-upload" style={{ fontSize: 10 }} />{currentAsset ? "Replace file" : "Upload file"}
+                          </button>
+                          <button className="gb gbp" style={{ fontSize: 10, flex: 1, justifyContent: "center" }} disabled={uploading === p.id} onClick={() => triggerUpload(p.id)}>
+                            {uploading === p.id
+                              ? <i className="ti ti-loader-2" style={{ animation: "spin 1s linear infinite", fontSize: 10 }} />
+                              : <><i className="ti ti-send" style={{ fontSize: 10 }} />{isRevision ? "Re-submit" : "Submit for review"}</>}
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
     </DashboardShell>
   );
