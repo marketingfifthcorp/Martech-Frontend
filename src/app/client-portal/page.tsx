@@ -92,6 +92,9 @@ export default function ClientPortalPage() {
   const [revisionPost, setRevisionPost] = useState<any>(null);
   const [revisionComment, setRevisionComment] = useState("");
   const [creativeFilter, setCreativeFilter] = useState<"all" | "pending" | "approved">("all");
+  const [portalClientId, setPortalClientId] = useState<string | null>(null);
+  const [analytics, setAnalytics] = useState<any>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
   useEffect(() => {
     if (checking) return;
@@ -99,6 +102,7 @@ export default function ClientPortalPage() {
       try {
         const me = await api.users.me();
         if (me.clientOf?.id) {
+          setPortalClientId(me.clientOf.id);
           try { const strats = await api.strategy.listByClient(me.clientOf.id); if (strats.length) setStrategy(strats[0]); } catch {}
           try { setPosts(await api.posts.listByClient(me.clientOf.id)); } catch {}
         }
@@ -107,6 +111,21 @@ export default function ClientPortalPage() {
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [checking]);
+
+  useEffect(() => {
+    if (activeTab !== "reports" || !portalClientId) return;
+    let cancelled = false;
+    (async () => {
+      setAnalyticsLoading(true);
+      try {
+        const data = await api.analytics.get(portalClientId, "30d");
+        if (!cancelled) setAnalytics(data);
+      } catch {}
+      finally { if (!cancelled) setAnalyticsLoading(false); }
+    })();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, portalClientId]);
 
   function toggleTheme() {
     const html = document.documentElement;
@@ -335,38 +354,102 @@ export default function ClientPortalPage() {
       )}
 
       {/* ── Reports ── */}
-      {activeTab === "reports" && (
+      {activeTab === "reports" && (() => {
+        const v = (val: number | null | undefined, fmt?: (n: number) => string) =>
+          analyticsLoading ? "…" : val != null ? (fmt ? fmt(val) : String(val)) : "—";
+        const fmtNum = (n: number) =>
+          n >= 1_000_000 ? (n / 1_000_000).toFixed(1) + "M" : n >= 1_000 ? (n / 1_000).toFixed(1) + "k" : String(n);
+
+        const PLATFORM_COLOR: Record<string, string> = {
+          instagram: "#e1306c", linkedin: "#0077b5", tiktok: "#5dcaa5", x: "var(--t2)",
+        };
+        const PLATFORM_ICON: Record<string, string> = {
+          instagram: "ti-brand-instagram", linkedin: "ti-brand-linkedin",
+          tiktok: "ti-brand-tiktok", x: "ti-brand-x",
+        };
+
+        const timeline: { date: string; value: number }[] = analytics?.timeline ?? [];
+        const maxVal = Math.max(...timeline.map((t) => t.value), 1);
+        const W = 560, yTop = 8, yBot = 64;
+        const pts = timeline.map((t, i) => ({
+          x: (i / Math.max(timeline.length - 1, 1)) * W,
+          y: yBot - (t.value / maxVal) * (yBot - yTop),
+        }));
+        let chartLine = "M0,64 L560,64";
+        let chartArea = "";
+        if (pts.length > 0) {
+          chartLine = `M${pts[0].x},${pts[0].y}`;
+          for (let i = 1; i < pts.length; i++) {
+            const cpX = (pts[i - 1].x + pts[i].x) / 2;
+            chartLine += ` C${cpX},${pts[i - 1].y} ${cpX},${pts[i].y} ${pts[i].x},${pts[i].y}`;
+          }
+          chartArea = `${chartLine} L${pts[pts.length - 1].x},72 L${pts[0].x},72Z`;
+        }
+
+        const platforms: { platform: string; count: number }[] = analytics?.postsByPlatform ?? [];
+        const platformTotal = platforms.reduce((s, p) => s + p.count, 0) || 1;
+
+        return (
         <div className="sa">
           <div className="g4" style={{ marginBottom: 16 }}>
-            {[["Total reach","142.8k",undefined],[" Engagement rate","4.7%","var(--green)"],["Posts published",posts.filter((p) => p.status === "PUBLISHED").length,undefined],["Followers gained","+284","var(--green)"]].map(([l,v,c]) => (
-              <div key={l as string} className="mt"><div className="ml">{l as string}</div><div className="mv" style={{ color: (c as string) ?? undefined }}>{String(v)}</div></div>
-            ))}
+            <div className="mt"><div className="ml">Total reach</div><div className="mv">{v(analytics?.totalReach, fmtNum)}</div></div>
+            <div className="mt">
+              <div className="ml">Engagement rate</div>
+              <div className="mv" style={{ color: analytics?.engagementRate != null ? "var(--green)" : undefined }}>
+                {v(analytics?.engagementRate, (n) => `${n}%`)}
+              </div>
+            </div>
+            <div className="mt">
+              <div className="ml">Posts published</div>
+              <div className="mv">{analyticsLoading ? "…" : analytics?.postsPublished ?? posts.filter((p) => p.status === "PUBLISHED").length}</div>
+            </div>
+            <div className="mt">
+              <div className="ml">Followers gained</div>
+              <div className="mv" style={{ color: analytics?.followersGained != null && analytics.followersGained > 0 ? "var(--green)" : undefined }}>
+                {analyticsLoading ? "…" : analytics?.followersGained != null ? (analytics.followersGained >= 0 ? "+" : "") + analytics.followersGained : "—"}
+              </div>
+            </div>
           </div>
-          <div className="ibox" style={{ marginBottom: 14 }}>
-            <div className="ibt"><i className="ti ti-robot" style={{ fontSize: 12 }} />Monthly summary</div>
-            <div className="ibx">LinkedIn drove <strong style={{ fontWeight: 400, color: "var(--t1)" }}>72% of total reach</strong>. Your best performing format was <strong style={{ fontWeight: 400, color: "var(--t1)" }}>data-led carousels</strong> averaging 6.8% engagement. You are outperforming all 3 tracked competitors on engagement rate.</div>
-          </div>
+
           <div className="g2e">
             <div className="cd">
-              <div className="cdt">Engagement rate over time</div>
+              <div className="cdt">Posts published over time</div>
               <svg className="csvg" viewBox="0 0 560 76" preserveAspectRatio="none">
-                <defs><linearGradient id="cpgf" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#34d97b" stopOpacity="0.18" /><stop offset="100%" stopColor="#34d97b" stopOpacity="0" /></linearGradient></defs>
-                <path d="M0,60 C80,50 160,40 240,34 C320,28 400,18 480,14 C510,12 540,10 560,8" fill="none" stroke="#34d97b" strokeWidth="1.5" strokeLinecap="round" />
-                <path d="M0,60 C80,50 160,40 240,34 C320,28 400,18 480,14 C510,12 540,10 560,8 L560,72 L0,72Z" fill="url(#cpgf)" />
+                <defs>
+                  <linearGradient id="cpgf" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#34d97b" stopOpacity="0.18" />
+                    <stop offset="100%" stopColor="#34d97b" stopOpacity="0" />
+                  </linearGradient>
+                </defs>
+                {chartArea && <path d={chartArea} fill="url(#cpgf)" />}
+                <path d={chartLine} fill="none" stroke="#34d97b" strokeWidth="1.5" strokeLinecap="round" />
               </svg>
             </div>
             <div className="cd">
-              <div className="cdt">Reach by platform</div>
-              {[{label:"LinkedIn",icon:"ti-brand-linkedin",color:"#0077b5",reach:"102k",pct:72},{label:"Instagram",icon:"ti-brand-instagram",color:"#e1306c",reach:"40k",pct:28}].map((p) => (
-                <div key={p.label} className="hbr"><div className="hbl"><i className={`ti ${p.icon}`} style={{ fontSize: 11, color: p.color }} />{p.label}</div><div className="hbt"><div className="hbf" style={{ width: `${p.pct}%`, background: p.color }} /></div><div className="hbv">{p.reach}</div></div>
-              ))}
+              <div className="cdt">Posts by platform</div>
+              {platforms.length > 0 ? platforms.map((p) => (
+                <div key={p.platform} className="hbr">
+                  <div className="hbl">
+                    <i className={`ti ${PLATFORM_ICON[p.platform] ?? "ti-brand-instagram"}`} style={{ fontSize: 11, color: PLATFORM_COLOR[p.platform] ?? "var(--t3)" }} />
+                    {p.platform.charAt(0).toUpperCase() + p.platform.slice(1)}
+                  </div>
+                  <div className="hbt">
+                    <div className="hbf" style={{ width: `${Math.round((p.count / platformTotal) * 100)}%`, background: PLATFORM_COLOR[p.platform] ?? "var(--t3)" }} />
+                  </div>
+                  <div className="hbv">{p.count}</div>
+                </div>
+              )) : (
+                <div style={{ color: "var(--t4)", fontSize: 10, padding: "8px 0" }}>No published posts yet</div>
+              )}
             </div>
           </div>
+
           <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
-            <button className="gb gbg"><i className="ti ti-download" />Download PDF report</button>
+            <button className="gb gbg" title="Coming soon"><i className="ti ti-download" />Download PDF report</button>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* Revision modal */}
       {revisionModal && (

@@ -190,6 +190,13 @@ export const socialAuthApi = {
     }),
 };
 
+export const analyticsApi = {
+  get: (clientId: string, period: string, token: string) =>
+    apiFetch<any>(`/analytics/${clientId}?period=${period}`, { token }),
+  seedFollowerSnapshot: (token: string) =>
+    apiFetch<any>('/analytics/seed-follower-snapshot', { method: 'POST', token }),
+};
+
 export const notificationsApi = {
   list: (token: string, unread?: boolean) =>
     apiFetch<any[]>(`/notifications${unread ? "?unread=true" : ""}`, { token }),

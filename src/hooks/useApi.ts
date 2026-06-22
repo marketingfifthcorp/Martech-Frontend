@@ -5,6 +5,7 @@ import { useCallback } from "react";
 import {
   clientsApi, briefsApi, strategyApi,
   projectsApi, postsApi, assetsApi, publishingApi, usersApi, notificationsApi, socialAuthApi,
+  analyticsApi,
 } from "@/lib/api";
 
 /**
@@ -100,6 +101,11 @@ export function useApi() {
       markRead: async (id: string) => notificationsApi.markRead(id, await token()),
       markAllRead: async () => notificationsApi.markAllRead(await token()),
       delete: async (id: string) => notificationsApi.delete(id, await token()),
+    },
+    analytics: {
+      get: async (clientId: string, period: string) =>
+        analyticsApi.get(clientId, period, await token()),
+      seedFollowerSnapshot: async () => analyticsApi.seedFollowerSnapshot(await token()),
     },
   };
 }

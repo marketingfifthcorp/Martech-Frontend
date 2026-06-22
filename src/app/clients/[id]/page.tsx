@@ -36,6 +36,32 @@ const PLATFORM_BG: Record<string, string> = {
   tiktok: "rgba(93,202,165,.13)", x: "rgba(255,255,255,.06)",
 };
 
+function fmtNum(n: number): string {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + "M";
+  if (n >= 1_000) return (n / 1_000).toFixed(1) + "k";
+  return String(n);
+}
+
+function timelineToPath(
+  timeline: { date: string; value: number }[],
+): { line: string; area: string } {
+  if (!timeline.length) return { line: "M0,64 L560,64", area: "" };
+  // Scale y relative to actual max so the chart never clips or flattens
+  const maxVal = Math.max(...timeline.map((t) => t.value), 1);
+  const W = 560, yTop = 8, yBot = 64;
+  const pts = timeline.map((t, i) => ({
+    x: (i / Math.max(timeline.length - 1, 1)) * W,
+    y: yBot - (t.value / maxVal) * (yBot - yTop),
+  }));
+  let d = `M${pts[0].x},${pts[0].y}`;
+  for (let i = 1; i < pts.length; i++) {
+    const cpX = (pts[i - 1].x + pts[i].x) / 2;
+    d += ` C${cpX},${pts[i - 1].y} ${cpX},${pts[i].y} ${pts[i].x},${pts[i].y}`;
+  }
+  const last = pts[pts.length - 1];
+  return { line: d, area: `${d} L${last.x},72 L${pts[0].x},72Z` };
+}
+
 function CalendarGrid({ posts, onPostClick }: { posts: any[]; onPostClick: (p: any) => void }) {
   const y = TODAY.getFullYear(), m = TODAY.getMonth();
   const firstDay = new Date(y, m, 1).getDay();
@@ -121,6 +147,9 @@ export default function ClientDetailPage() {
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [designFilter, setDesignFilter] = useState<string | null>(null);
+  const [analytics, setAnalytics] = useState<any>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [analyticsPeriod, setAnalyticsPeriod] = useState<"15d" | "30d" | "60d" | "90d">("30d");
 
   useEffect(() => {
     (async () => {
@@ -139,6 +168,21 @@ export default function ClientDetailPage() {
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId]);
+
+  useEffect(() => {
+    if (tab !== 5) return;
+    let cancelled = false;
+    (async () => {
+      setAnalyticsLoading(true);
+      try {
+        const data = await api.analytics.get(clientId, analyticsPeriod);
+        if (!cancelled) setAnalytics(data);
+      } catch {}
+      finally { if (!cancelled) setAnalyticsLoading(false); }
+    })();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, analyticsPeriod, clientId]);
 
   async function generateStrategy() {
     if (!client?.briefs?.[0]?.id) return;
@@ -746,56 +790,139 @@ export default function ClientDetailPage() {
         )}
 
         {/* ── Analytics ── */}
-        {tab === 5 && (
+        {tab === 5 && (() => {
+          const v = (val: number | null | undefined, fmt?: (n: number) => string) =>
+            analyticsLoading ? "…" : val != null ? (fmt ? fmt(val) : String(val)) : "—";
+          const { line: chartLine, area: chartArea } = timelineToPath(analytics?.timeline ?? []);
+
+          const PLATFORM_ICON: Record<string, string> = {
+            instagram: "ti-brand-instagram", linkedin: "ti-brand-linkedin",
+            tiktok: "ti-brand-tiktok", x: "ti-brand-x",
+          };
+          const FORMAT_COLOR: Record<string, string> = {
+            carousel: "var(--green)", static: "var(--blue)", reel: "var(--amber)",
+            story: "var(--bar-tr)", thread: "var(--t3)",
+          };
+
+          const platforms: { platform: string; count: number }[] = analytics?.postsByPlatform ?? [];
+          const platformTotal = platforms.reduce((s: number, p: any) => s + p.count, 0) || 1;
+
+          const formats: { format: string; count: number }[] = analytics?.postsByFormat ?? [];
+          const formatMax = Math.max(...formats.map((f: any) => f.count), 1);
+
+          return (
           <div className="sa">
+            {/* Period selector + action buttons */}
             <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 14, flexWrap: "wrap" }}>
               <div style={{ display: "flex", gap: 3 }}>
-                {["15d","30d","60d","90d"].map((p, i) => (
-                  <span key={p} style={{ padding: "4px 10px", fontSize: 10, borderRadius: 20, border: `1px solid ${i === 1 ? "var(--gbb)" : "var(--in-b)"}`, color: i === 1 ? "var(--green)" : "var(--t4)", background: i === 1 ? "var(--gb)" : "transparent", cursor: "pointer", fontWeight: 300 }}>{p}</span>
+                {(["15d","30d","60d","90d"] as const).map((p) => (
+                  <span key={p} onClick={() => setAnalyticsPeriod(p)} style={{
+                    padding: "4px 10px", fontSize: 10, borderRadius: 20, cursor: "pointer", fontWeight: 300,
+                    border: `1px solid ${analyticsPeriod === p ? "var(--gbb)" : "var(--in-b)"}`,
+                    color: analyticsPeriod === p ? "var(--green)" : "var(--t4)",
+                    background: analyticsPeriod === p ? "var(--gb)" : "transparent",
+                  }}>{p}</span>
                 ))}
               </div>
               <button className="gb gbp" style={{ marginLeft: "auto" }}><i className="ti ti-robot" style={{ fontSize: 11 }} />AI report</button>
               <button className="gb"><i className="ti ti-download" style={{ fontSize: 11 }} />Export</button>
             </div>
+
+            {/* Stat cards */}
             <div className="g5" style={{ marginBottom: 14 }}>
-              {[["Total reach","142.8k",undefined,"+18%"],["Engagement","4.7%","var(--green)","+0.9%"],["Posts",posts.length,undefined,"On target"],["Followers","+284","var(--green)","+12%"],["Link clicks","1,840","var(--green)","+22%"]].map(([l, v, c, s]) => (
-                <div key={l as string} className="mt"><div className="ml">{l as string}</div><div className="mv" style={{ color: (c as string) ?? undefined }}>{String(v)}</div><div className="ms" style={{ color: (c as string) ?? undefined }}>{s as string}</div></div>
-              ))}
+              <div className="mt">
+                <div className="ml">Total reach</div>
+                <div className="mv">{v(analytics?.totalReach, fmtNum)}</div>
+                <div className="ms">{analytics?.totalReach != null ? "Instagram" : "Need manage_insights"}</div>
+              </div>
+              <div className="mt">
+                <div className="ml">Engagement</div>
+                <div className="mv" style={{ color: analytics?.engagementRate != null ? "var(--green)" : undefined }}>
+                  {v(analytics?.engagementRate, (n) => `${n}%`)}
+                </div>
+                <div className="ms" style={{ color: analytics?.engagementRate != null ? "var(--green)" : undefined }}>
+                  {analytics?.engagementRate != null ? "avg per post" : "—"}
+                </div>
+              </div>
+              <div className="mt">
+                <div className="ml">Posts</div>
+                <div className="mv">{analyticsLoading ? "…" : analytics?.postsPublished ?? posts.filter((p) => p.status === "PUBLISHED").length}</div>
+                <div className="ms">published</div>
+              </div>
+              <div className="mt">
+                <div className="ml">Followers</div>
+                <div className="mv" style={{ color: analytics?.followersGained != null && analytics.followersGained > 0 ? "var(--green)" : undefined }}>
+                  {analyticsLoading ? "…" : analytics?.followersGained != null ? (analytics.followersGained >= 0 ? "+" : "") + analytics.followersGained : "—"}
+                </div>
+                <div className="ms">{analytics?.followersGained != null ? `last ${analyticsPeriod}` : "Need 2+ days"}</div>
+              </div>
+              <div className="mt">
+                <div className="ml">Publish rate</div>
+                <div className="mv" style={{ color: analytics?.publishSuccessRate >= 80 ? "var(--green)" : undefined }}>
+                  {v(analytics?.publishSuccessRate, (n) => `${n}%`)}
+                </div>
+                <div className="ms">success rate</div>
+              </div>
             </div>
-            <div className="ibox">
-              <div className="ibt"><i className="ti ti-robot" style={{ fontSize: 12 }} />AI insight — 30 days</div>
-              <div className="ibx">LinkedIn driving <strong style={{ fontWeight: 400, color: "var(--t1)" }}>72% of reach</strong>. Best: <strong style={{ fontWeight: 400, color: "var(--t1)" }}>data-led carousels</strong> (6.8% avg eng). Reels underperforming — shift 2 slots to carousels.</div>
-              <div><span className="ibtg">↑ LinkedIn top</span><span className="ibtg">↑ Carousels win</span><span className="ibtg">↓ Reels weak</span></div>
-            </div>
+
+            {/* Chart */}
             <div className="cd" style={{ marginBottom: 10 }}>
-              <div className="cdt">Engagement rate — last 30 days</div>
+              <div className="cdt">Posts published — last {analyticsPeriod}</div>
               <svg className="csvg" viewBox="0 0 560 76" preserveAspectRatio="none">
-                <defs><linearGradient id="gfcd" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#34d97b" stopOpacity="0.18" /><stop offset="100%" stopColor="#34d97b" stopOpacity="0" /></linearGradient></defs>
+                <defs>
+                  <linearGradient id="gfcd" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#34d97b" stopOpacity="0.18" />
+                    <stop offset="100%" stopColor="#34d97b" stopOpacity="0" />
+                  </linearGradient>
+                </defs>
                 <line x1="0" y1="14" x2="560" y2="14" stroke="rgba(255,255,255,.05)" strokeWidth="1" />
                 <line x1="0" y1="38" x2="560" y2="38" stroke="rgba(255,255,255,.05)" strokeWidth="1" />
-                <path d="M0,60 C40,52 80,44 120,36 C160,28 200,44 240,38 C280,32 320,16 360,12 C400,8 440,26 480,18 C540,10 560,8" fill="none" stroke="#34d97b" strokeWidth="1.5" strokeLinecap="round" />
-                <path d="M0,60 C40,52 80,44 120,36 C160,28 200,44 240,38 C280,32 320,16 360,12 C400,8 440,26 480,18 C540,10 560,8 L560,72 L0,72Z" fill="url(#gfcd)" />
+                {chartArea && <path d={chartArea} fill="url(#gfcd)" />}
+                <path d={chartLine} fill="none" stroke="#34d97b" strokeWidth="1.5" strokeLinecap="round" />
               </svg>
             </div>
+
             <div className="g2e" style={{ marginBottom: 10 }}>
+              {/* Format performance */}
               <div className="cd">
                 <div className="cdt">Format performance</div>
                 <div className="bch">
-                  {[["Carousel","6.8%",85,"var(--green)"],["Static","5.2%",65,"var(--blue)"],["Reel","3.1%",39,"var(--amber)"],["Story","2.4%",30,"var(--bar-tr)"]].map(([l, v, h, c]) => (
-                    <div key={l as string} className="bw"><div className="bv">{v as string}</div><div className="bar" style={{ height: `${h}%`, background: c as string }} /><div className="bl">{l as string}</div></div>
-                  ))}
+                  {formats.length > 0 ? formats.map((f: any) => (
+                    <div key={f.format} className="bw">
+                      <div className="bv">{f.count}</div>
+                      <div className="bar" style={{ height: `${Math.round((f.count / formatMax) * 100)}%`, background: FORMAT_COLOR[f.format] ?? "var(--t3)" }} />
+                      <div className="bl">{f.format.charAt(0).toUpperCase() + f.format.slice(1)}</div>
+                    </div>
+                  )) : (
+                    <div style={{ color: "var(--t4)", fontSize: 10, padding: "8px 0" }}>No published posts yet</div>
+                  )}
                 </div>
               </div>
+
+              {/* Posts by platform */}
               <div className="cd">
-                <div className="cdt">Reach by platform</div>
-                {[["LinkedIn","ti-brand-linkedin","#0077b5","102k",72],["Instagram","ti-brand-instagram","#e1306c","40k",28]].map(([l, icon, c, reach, pct]) => (
-                  <div key={l as string} className="hbr"><div className="hbl"><i className={`ti ${icon}`} style={{ fontSize: 11, color: c as string }} />{l as string}</div><div className="hbt"><div className="hbf" style={{ width: `${pct}%`, background: c as string }} /></div><div className="hbv">{reach as string}</div></div>
-                ))}
+                <div className="cdt">Posts by platform</div>
+                {platforms.length > 0 ? platforms.map((p: any) => (
+                  <div key={p.platform} className="hbr">
+                    <div className="hbl">
+                      <i className={`ti ${PLATFORM_ICON[p.platform] ?? "ti-brand-instagram"}`} style={{ fontSize: 11, color: PLATFORM_COLOR[p.platform] ?? "var(--t3)" }} />
+                      {p.platform.charAt(0).toUpperCase() + p.platform.slice(1)}
+                    </div>
+                    <div className="hbt">
+                      <div className="hbf" style={{ width: `${Math.round((p.count / platformTotal) * 100)}%`, background: PLATFORM_COLOR[p.platform] ?? "var(--t3)" }} />
+                    </div>
+                    <div className="hbv">{p.count}</div>
+                  </div>
+                )) : (
+                  <div style={{ color: "var(--t4)", fontSize: 10, padding: "8px 0" }}>No data yet</div>
+                )}
               </div>
             </div>
+
+            {/* Competitor benchmark — static placeholder */}
             <div className="cd">
               <div className="cdt">Competitor benchmark</div>
-              {[{ name: client?.name ?? "Client", v: "4.7%", pct: 94, own: true }, { name: "Float", v: "2.1%", pct: 42 }, { name: "Fathom", v: "1.8%", pct: 36 }, { name: "Futrli", v: "1.2%", pct: 24 }].map((c) => (
+              {[{ name: client?.name ?? "Client", v: "—", pct: 0, own: true }, { name: "Competitor A", v: "—", pct: 0 }, { name: "Competitor B", v: "—", pct: 0 }].map((c) => (
                 <div key={c.name} className={`cr${c.own ? " own" : ""}`}>
                   <div className="cn">{c.name}{c.own ? " ✦" : ""}</div>
                   <div className="ctr"><div className="cbr" style={{ width: `${c.pct}%`, background: c.own ? "var(--green)" : "var(--bar-tr)" }} /></div>
@@ -804,7 +931,8 @@ export default function ClientDetailPage() {
               ))}
             </div>
           </div>
-        )}
+          );
+        })()}
 
         {/* ── Settings ── */}
         {tab === 6 && (
