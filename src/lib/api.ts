@@ -65,6 +65,10 @@ export const clientsApi = {
     apiFetch<any>("/clients/stats", { token }),
   get: (id: string, token: string) =>
     apiFetch<any>(`/clients/${id}`, { token }),
+  getOverview: (id: string, token: string) =>
+    apiFetch<{ client: any; strategies: any[]; posts: any[]; projects: any[] }>(
+      `/clients/${id}/overview`, { token }
+    ),
   create: (data: any, token: string) =>
     apiFetch<any>("/clients", { method: "POST", body: data, token }),
   update: (id: string, data: any, token: string) =>
@@ -145,6 +149,10 @@ export const postsApi = {
     apiFetch<{ suggestion: string | string[] }>(`/posts/${id}/improve-field`, {
       method: "POST", body: { field, instruction }, token,
     }),
+  markCreativeUploaded: (id: string, token: string) =>
+    apiFetch<any>(`/posts/${id}/creative-uploaded`, { method: "POST", token }),
+  updateStatus: (id: string, status: string, token: string) =>
+    apiFetch<any>(`/posts/${id}/status`, { method: "PATCH", body: { status }, token }),
 };
 
 export const assetsApi = {
@@ -177,6 +185,8 @@ export const usersApi = {
   list: (token: string) => apiFetch<any[]>("/users", { token }),
   updateRole: (id: string, role: string, token: string) =>
     apiFetch<any>(`/users/${id}/role`, { method: "PATCH", body: { role }, token }),
+  invite: (email: string, role: string, token: string) =>
+    apiFetch<any>("/users/invite", { method: "POST", body: { email, role }, token }),
 };
 
 export const socialAuthApi = {

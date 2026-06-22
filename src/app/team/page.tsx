@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { DashboardShell } from "@/components/layout/DashboardShell";
 import { useApi } from "@/hooks/useApi";
 import { useRoleGuard } from "@/hooks/useRoleGuard";
+import { useToast } from "@/components/ui/Toast";
 
 const ROLE_COLORS: Record<string, { bg: string; color: string; border: string }> = {
   ADMIN: { bg: "var(--gb)", color: "var(--green)", border: "var(--gbb)" },
@@ -36,11 +37,15 @@ function getInitials(firstName: string, lastName: string) {
 
 export default function TeamPage() {
   const api = useApi();
+  const toast = useToast();
   const { checking } = useRoleGuard(["ADMIN"]);
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [inviteModal, setInviteModal] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState("DESIGNER");
+  const [inviting, setInviting] = useState(false);
 
   useEffect(() => {
     if (checking) return;
@@ -60,6 +65,22 @@ export default function TeamPage() {
       await api.users.updateRole(userId, role);
       setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, role } : u));
     } catch {}
+  }
+
+  async function sendInvite() {
+    if (!inviteEmail.trim()) { toast.error("Email required", "Enter the team member's email address."); return; }
+    setInviting(true);
+    try {
+      await api.users.invite(inviteEmail.trim(), inviteRole);
+      toast.success("Invite sent", `${inviteEmail.trim()} will receive a sign-up link via email.`);
+      setInviteModal(false);
+      setInviteEmail("");
+      setInviteRole("DESIGNER");
+    } catch (e: any) {
+      toast.error("Invite failed", e.message ?? "Something went wrong. Try again.");
+    } finally {
+      setInviting(false);
+    }
   }
 
   if (checking) return null;
@@ -151,32 +172,50 @@ export default function TeamPage() {
 
       {/* Invite modal */}
       {inviteModal && (
-        <div className="mo" onClick={(e) => { if (e.target === e.currentTarget) setInviteModal(false); }}>
-          <div className="mb" style={{ maxWidth: 520 }}>
+        <div className="mo" onClick={(e) => { if (e.target === e.currentTarget && !inviting) { setInviteModal(false); } }}>
+          <div className="mb" style={{ maxWidth: 460 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-              <div><div className="mbt">Invite team member</div><div className="mbs" style={{ marginBottom: 0 }}>Send an email invite to join your ZYR workspace.</div></div>
-              <button className="gb gbg gbs" onClick={() => setInviteModal(false)}><i className="ti ti-x" /></button>
+              <div>
+                <div className="mbt">Invite team member</div>
+                <div className="mbs" style={{ marginBottom: 0 }}>They&apos;ll receive a sign-up link via email.</div>
+              </div>
+              <button className="gb gbg gbs" onClick={() => { if (!inviting) setInviteModal(false); }}><i className="ti ti-x" /></button>
             </div>
-            <div className="fg" style={{ marginBottom: 12 }}>
-              <div className="fl"><label>First name</label><input type="text" placeholder="Sara" /></div>
-              <div className="fl"><label>Last name</label><input type="text" placeholder="Ahmed" /></div>
+
+            <div className="fl" style={{ marginBottom: 12 }}>
+              <label>Work email <span style={{ color: "#ef4444" }}>*</span></label>
+              <input
+                type="email"
+                placeholder="sara@agency.io"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") sendInvite(); }}
+                disabled={inviting}
+                autoFocus
+              />
             </div>
-            <div className="fl" style={{ marginBottom: 12 }}><label>Work email</label><input type="email" placeholder="sara@agency.io" /></div>
+
             <div className="fl" style={{ marginBottom: 16 }}>
               <label>Role</label>
-              <select>
+              <select value={inviteRole} onChange={(e) => setInviteRole(e.target.value)} disabled={inviting}>
                 <option value="ADMIN">Account Manager — manage clients, calendars, approvals</option>
                 <option value="DESIGNER">Designer — upload creative files only</option>
                 <option value="CLIENT">Client — portal access only</option>
               </select>
             </div>
+
             <div style={{ background: "var(--in)", border: "1px solid var(--in-b)", borderRadius: 8, padding: "10px 12px", fontSize: 10, color: "var(--t4)", marginBottom: 16, lineHeight: 1.6, fontWeight: 300 }}>
               <i className="ti ti-info-circle" style={{ color: "var(--green)", fontSize: 11, verticalAlign: -1, marginRight: 4 }} />
-              They&apos;ll receive an email with a link to set their password and access the workspace.
+              Clerk sends a branded sign-up email. When they sign in for the first time their role is automatically set to <strong style={{ fontWeight: 400, color: "var(--t2)" }}>{ROLE_LABEL[inviteRole] ?? inviteRole}</strong>.
             </div>
+
             <div className="mbb">
-              <button className="gb gbg" onClick={() => setInviteModal(false)}>Cancel</button>
-              <button className="gb gbp" onClick={() => setInviteModal(false)}><i className="ti ti-send" /> Send invite</button>
+              <button className="gb gbg" onClick={() => { if (!inviting) setInviteModal(false); }}>Cancel</button>
+              <button className="gb gbp" onClick={sendInvite} disabled={inviting}>
+                {inviting
+                  ? <><i className="ti ti-loader-2" style={{ animation: "spin 1s linear infinite" }} /> Sending…</>
+                  : <><i className="ti ti-send" /> Send invite</>}
+              </button>
             </div>
           </div>
         </div>

@@ -154,15 +154,14 @@ export default function ClientDetailPage() {
   useEffect(() => {
     (async () => {
       try {
-        const c = await api.clients.get(clientId);
-        setClient(c);
-        try { const strats = await api.strategy.listByClient(clientId); if (strats.length) setStrategy(strats[0]); } catch {}
-        try { setPosts(await api.posts.listByClient(clientId)); } catch {}
-        try {
-          const projs = await api.projects.listByClient(clientId);
-          const cur = projs.find((p: any) => p.month === TODAY.getMonth() + 1 && p.year === TODAY.getFullYear());
-          if (cur) setProject(cur);
-        } catch {}
+        const overview = await api.clients.getOverview(clientId);
+        setClient(overview.client);
+        if (overview.strategies?.length) setStrategy(overview.strategies[0]);
+        setPosts(overview.posts ?? []);
+        const cur = (overview.projects ?? []).find(
+          (p: any) => p.month === TODAY.getMonth() + 1 && p.year === TODAY.getFullYear()
+        );
+        if (cur) setProject(cur);
       } catch {}
       finally { setLoading(false); }
     })();

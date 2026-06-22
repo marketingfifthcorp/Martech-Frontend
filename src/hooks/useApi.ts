@@ -8,6 +8,10 @@ import {
   analyticsApi,
 } from "@/lib/api";
 
+// Module-level cache — shared across all hook instances, persists across re-renders
+let _cachedToken: string | null = null;
+let _tokenExpiresAt = 0;
+
 /**
  * useApi — returns all API resource methods pre-bound with the active Clerk token.
  * Usage: const { clients } = useApi();
@@ -17,8 +21,12 @@ export function useApi() {
   const { getToken } = useAuth();
 
   const token = useCallback(async () => {
+    const now = Date.now();
+    if (_cachedToken && now < _tokenExpiresAt) return _cachedToken;
     const t = await getToken();
     if (!t) throw new Error("Not authenticated");
+    _cachedToken = t;
+    _tokenExpiresAt = now + 30_000; // cache for 30 seconds
     return t;
   }, [getToken]);
 
@@ -27,6 +35,7 @@ export function useApi() {
       list: async () => clientsApi.list(await token()),
       stats: async () => clientsApi.stats(await token()),
       get: async (id: string) => clientsApi.get(id, await token()),
+      getOverview: async (id: string) => clientsApi.getOverview(id, await token()),
       create: async (data: any) => clientsApi.create(data, await token()),
       update: async (id: string, data: any) => clientsApi.update(id, data, await token()),
       updateStatus: async (id: string, status: string) =>
@@ -69,6 +78,8 @@ export function useApi() {
       expandCaption: async (id: string) => postsApi.expandCaption(id, await token()),
       improveField: async (id: string, field: string, instruction: string) =>
         postsApi.improveField(id, field, instruction, await token()),
+      markCreativeUploaded: async (id: string) => postsApi.markCreativeUploaded(id, await token()),
+      updateStatus: async (id: string, status: string) => postsApi.updateStatus(id, status, await token()),
     },
     assets: {
       upload: async (postId: string, file: File, notes: string) =>
@@ -86,6 +97,7 @@ export function useApi() {
       me: async () => usersApi.me(await token()),
       list: async () => usersApi.list(await token()),
       updateRole: async (id: string, role: string) => usersApi.updateRole(id, role, await token()),
+      invite: async (email: string, role: string) => usersApi.invite(email, role, await token()),
     },
     socialAuth: {
       connectUrl: async (platform: string, clientId: string) =>

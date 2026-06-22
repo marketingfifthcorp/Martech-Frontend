@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useClerk } from "@clerk/nextjs";
 import { useApi } from "@/hooks/useApi";
 import { useRoleGuard } from "@/hooks/useRoleGuard";
 
@@ -14,7 +16,7 @@ const TABS = [
   { key: "reports", label: "Reports", icon: "ti-chart-bar" },
 ];
 
-function ClientPortalLayout({ children, activeTab, onTabChange, user, isDark, onToggleTheme }: any) {
+function ClientPortalLayout({ children, activeTab, onTabChange, user, isDark, onToggleTheme, onSignOut, signingOut }: any) {
   return (
     <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "row", overflow: "hidden", background: "var(--bg)" }}>
       {/* Sidebar */}
@@ -46,12 +48,39 @@ function ClientPortalLayout({ children, activeTab, onTabChange, user, isDark, on
           ))}
         </div>
         <div style={{ padding: "10px 6px", borderTop: "1px solid var(--sb-b)" }}>
-          <div className="ur">
-            <div className="av">{user?.firstName?.[0]}{user?.lastName?.[0]}</div>
-            <div>
-              <div className="un">{[user?.firstName, user?.lastName].filter(Boolean).join(" ") || "Client"}</div>
-              <div className="uro">Client</div>
+          <div className="ur" style={{ justifyContent: "space-between" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flex: 1 }}>
+              <div className="av">{user?.firstName?.[0]}{user?.lastName?.[0]}</div>
+              <div style={{ minWidth: 0 }}>
+                <div className="un" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {[user?.firstName, user?.lastName].filter(Boolean).join(" ") || "Client"}
+                </div>
+                <div className="uro">Client</div>
+              </div>
             </div>
+            <button
+              onClick={onSignOut}
+              disabled={signingOut}
+              title="Sign out"
+              style={{
+                width: 28, height: 28, borderRadius: 7, border: "1px solid var(--fi-b)",
+                background: "transparent", color: "var(--t4)", cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                flexShrink: 0, transition: "all .15s",
+              }}
+              onMouseEnter={(e) => {
+                const b = e.currentTarget as HTMLButtonElement;
+                b.style.color = "var(--red)"; b.style.borderColor = "var(--rbb)"; b.style.background = "var(--rb)";
+              }}
+              onMouseLeave={(e) => {
+                const b = e.currentTarget as HTMLButtonElement;
+                b.style.color = "var(--t4)"; b.style.borderColor = "var(--fi-b)"; b.style.background = "transparent";
+              }}
+            >
+              {signingOut
+                ? <i className="ti ti-loader-2" style={{ fontSize: 12, animation: "spin 1s linear infinite" }} />
+                : <i className="ti ti-logout" style={{ fontSize: 12 }} />}
+            </button>
           </div>
         </div>
       </div>
@@ -79,9 +108,12 @@ function ClientPortalLayout({ children, activeTab, onTabChange, user, isDark, on
 
 export default function ClientPortalPage() {
   const api = useApi();
+  const router = useRouter();
+  const { signOut } = useClerk();
   const { checking, user } = useRoleGuard(["CLIENT", "ADMIN"]);
   const [activeTab, setActiveTab] = useState("strategy");
   const [isDark, setIsDark] = useState(true);
+  const [signingOut, setSigningOut] = useState(false);
   const [strategy, setStrategy] = useState<any>(null);
   const [posts, setPosts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -172,7 +204,12 @@ export default function ClientPortalPage() {
   const pendingPosts = posts.filter((p) => p.status === "AWAITING_APPROVAL");
 
   return (
-    <ClientPortalLayout activeTab={activeTab} onTabChange={setActiveTab} user={user} isDark={isDark} onToggleTheme={toggleTheme}>
+    <ClientPortalLayout
+      activeTab={activeTab} onTabChange={setActiveTab}
+      user={user} isDark={isDark} onToggleTheme={toggleTheme}
+      signingOut={signingOut}
+      onSignOut={async () => { setSigningOut(true); await signOut(); router.replace("/login"); }}
+    >
       {/* ── Strategy ── */}
       {activeTab === "strategy" && (
         <div className="sa">

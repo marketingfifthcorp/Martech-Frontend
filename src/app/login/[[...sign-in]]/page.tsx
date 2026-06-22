@@ -89,6 +89,7 @@ export default function LoginPage() {
             <div style={{ fontSize: 12, color: "var(--t3)", marginTop: 4, fontWeight: 300 }}>Sign in to your workspace</div>
           </div>
           <SignIn
+            fallbackRedirectUrl="/dashboard"
             appearance={{
               elements: {
                 rootBox: "w-full",
