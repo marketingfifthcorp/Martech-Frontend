@@ -170,7 +170,25 @@ export default function ClientDetailPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId]);
 
-  // Poll while strategy is awaiting client action so admin sees approval/changes without refreshing
+  // Re-fetch strategy each time admin opens the Strategy tab so stale data is never shown
+  useEffect(() => {
+    if (tab !== 1 || !clientId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const strats = await api.strategy.listByClient(clientId);
+        if (cancelled || !strats.length) return;
+        setStrategy(strats[0]);
+        if (strats[0].status !== strategy?.status) {
+          try { const ov = await api.clients.getOverview(clientId); setClient(ov.client); } catch {}
+        }
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, clientId]);
+
+  // Poll every 8s while strategy is awaiting client action
   useEffect(() => {
     if (strategy?.status !== "SENT_TO_CLIENT") return;
     const iv = setInterval(async () => {
@@ -545,6 +563,31 @@ export default function ClientDetailPage() {
                       <span className="pl plb" style={{ fontSize: 11, padding: "3px 10px" }}>{strategy.status?.replace(/_/g, " ")}</span>
                     </div>
 
+                    {/* Client approved banner */}
+                    {strategy.status === "APPROVED" && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", background: "var(--gb)", border: "1px solid var(--gbb)", borderRadius: 10, marginBottom: 14 }}>
+                        <i className="ti ti-circle-check" style={{ fontSize: 18, color: "var(--green)", flexShrink: 0 }} />
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 12, fontWeight: 400, color: "var(--green)" }}>Client approved this strategy</div>
+                          <div style={{ fontSize: 10, color: "var(--t3)", fontWeight: 300, marginTop: 2 }}>Ready to generate the content calendar</div>
+                        </div>
+                        <button className="gb gbp gbs" onClick={() => setTab(2)}>
+                          <i className="ti ti-calendar" /> Generate calendar
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Client requested changes banner */}
+                    {strategy.status === "CHANGES_REQUESTED" && (
+                      <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "12px 14px", background: "var(--rb)", border: "1px solid var(--rbb)", borderRadius: 10, marginBottom: 14 }}>
+                        <i className="ti ti-message-2" style={{ fontSize: 16, color: "var(--red)", flexShrink: 0, marginTop: 1 }} />
+                        <div>
+                          <div style={{ fontSize: 12, fontWeight: 400, color: "var(--red)" }}>Client requested changes</div>
+                          <div style={{ fontSize: 10, color: "var(--t3)", fontWeight: 300, marginTop: 2 }}>Update the strategy below and resend to client when ready</div>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Strategy card */}
                     <div className="ais" style={{ padding: "20px 22px" }}>
                       <div className="aih" style={{ marginBottom: 16 }}>
@@ -602,10 +645,12 @@ export default function ClientDetailPage() {
                           <div><div className="apt" style={{ fontSize: 12 }}>{a.label}</div></div>
                         </div>
                       ))}
-                      <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 14 }}>
-                        <button className="gb gbp" style={{ justifyContent: "center", padding: "10px 14px", fontSize: 12 }} onClick={() => setApproveModal(true)}><i className="ti ti-check" />Approve internally</button>
-                        <button className="gb gba" style={{ justifyContent: "center", padding: "10px 14px", fontSize: 12 }} onClick={() => { setSendModalContext("strategy"); setSendModal(true); }}><i className="ti ti-send" />Send to client</button>
-                      </div>
+                      {!["APPROVED"].includes(strategy.status) && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 14 }}>
+                          <button className="gb gbp" style={{ justifyContent: "center", padding: "10px 14px", fontSize: 12 }} onClick={() => setApproveModal(true)}><i className="ti ti-check" />Approve internally</button>
+                          <button className="gb gba" style={{ justifyContent: "center", padding: "10px 14px", fontSize: 12 }} onClick={() => { setSendModalContext("strategy"); setSendModal(true); }}><i className="ti ti-send" />Send to client</button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
