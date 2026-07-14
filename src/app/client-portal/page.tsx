@@ -113,6 +113,9 @@ export default function ClientPortalPage() {
   const [portalClientId, setPortalClientId] = useState<string | null>(null);
   const [analytics, setAnalytics] = useState<any>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [approvingStrategy, setApprovingStrategy] = useState(false);
+  const [approvingPostId, setApprovingPostId] = useState<string | null>(null);
+  const [submittingRevision, setSubmittingRevision] = useState(false);
 
   useEffect(() => {
     if (checking) return;
@@ -155,28 +158,36 @@ export default function ClientPortalPage() {
   }
 
   async function approveStrategy() {
-    if (!strategy) return;
+    if (!strategy || approvingStrategy) return;
+    setApprovingStrategy(true);
     try { await api.strategy.approve(strategy.id, "APPROVED", ""); } catch {}
     setStrategyApproved(true);
     setApprovedModal(true);
+    setApprovingStrategy(false);
   }
 
   async function approvePost(post: any) {
-    try { await api.posts.approve(post.id, "APPROVED", ""); setPosts((p) => p.map((x) => x.id === post.id ? { ...x, status: "APPROVED" } : x)); } catch {}
+    if (approvingPostId) return;
+    setApprovingPostId(post.id);
+    try {
+      await api.posts.approve(post.id, "APPROVED", "");
+      setPosts((p) => p.map((x) => x.id === post.id ? { ...x, status: "APPROVED" } : x));
+    } catch {}
+    setApprovingPostId(null);
   }
 
   async function handleRevision() {
-    if (revisionContext === "strategy" && strategy) {
-      try {
+    setSubmittingRevision(true);
+    try {
+      if (revisionContext === "strategy" && strategy) {
         await api.strategy.approve(strategy.id, "CHANGES_REQUESTED", revisionComment);
         setStrategy((s: any) => ({ ...s, status: "CHANGES_REQUESTED" }));
-      } catch {}
-    } else if (revisionContext === "post" && revisionPost) {
-      try {
+      } else if (revisionContext === "post" && revisionPost) {
         await api.posts.approve(revisionPost.id, "CHANGES_REQUESTED", revisionComment);
         setPosts((p) => p.map((x) => x.id === revisionPost.id ? { ...x, status: "REVISION_REQUIRED" } : x));
-      } catch {}
-    }
+      }
+    } catch {}
+    setSubmittingRevision(false);
     setRevisionComment("");
     setRevisionPost(null);
     setRevisionModal(false);
@@ -276,7 +287,11 @@ export default function ClientPortalPage() {
                   <div style={{ fontSize: 10, color: "var(--t4)", marginBottom: 8, fontWeight: 300 }}>Add a comment before approving</div>
                   <textarea className="ea" placeholder="e.g. Please adjust the tone…" style={{ minHeight: 80, marginBottom: 10 }} />
                   <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                    <button className="gb gbp" style={{ justifyContent: "center", padding: 10 }} onClick={approveStrategy}><i className="ti ti-check" />Approve strategy</button>
+                    <button className="gb gbp" style={{ justifyContent: "center", padding: 10 }} disabled={approvingStrategy} onClick={approveStrategy}>
+                      {approvingStrategy
+                        ? <><span style={{ display: "inline-block", width: 11, height: 11, border: "2px solid rgba(0,0,0,.25)", borderTopColor: "#000", borderRadius: "50%", animation: "spin 1s linear infinite" }} /> Approving…</>
+                        : <><i className="ti ti-check" />Approve strategy</>}
+                    </button>
                     <button className="gb gba" style={{ justifyContent: "center" }} onClick={() => { setRevisionContext("strategy"); setRevisionModal(true); }}><i className="ti ti-message" />Request changes</button>
                   </div>
                 </div>
@@ -338,8 +353,13 @@ export default function ClientPortalPage() {
                         <span className="pl plr" style={{ fontSize: 9 }}>Revision sent</span>
                       ) : (
                         <div style={{ display: "flex", gap: 5 }}>
-                          <button className="gb gbs gbp" style={{ flex: 1, justifyContent: "center" }} onClick={() => approvePost(p)}><i className="ti ti-check" style={{ fontSize: 9 }} />Approve</button>
-                          <button className="gb gbs gbr" style={{ flex: 1, justifyContent: "center" }} onClick={() => { setRevisionContext("post"); setRevisionPost(p); setRevisionModal(true); }}><i className="ti ti-refresh" style={{ fontSize: 9 }} />Revise</button>
+                          <button className="gb gbs gbp" style={{ flex: 1, justifyContent: "center" }} disabled={!!approvingPostId} onClick={() => approvePost(p)}>
+                            {approvingPostId === p.id
+                              ? <span style={{ display: "inline-block", width: 9, height: 9, border: "2px solid rgba(0,0,0,.25)", borderTopColor: "#000", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
+                              : <i className="ti ti-check" style={{ fontSize: 9 }} />}
+                            {approvingPostId === p.id ? "…" : "Approve"}
+                          </button>
+                          <button className="gb gbs gbr" style={{ flex: 1, justifyContent: "center" }} disabled={!!approvingPostId} onClick={() => { setRevisionContext("post"); setRevisionPost(p); setRevisionModal(true); }}><i className="ti ti-refresh" style={{ fontSize: 9 }} />Revise</button>
                         </div>
                       )}
                     </div>
@@ -505,7 +525,11 @@ export default function ClientPortalPage() {
             <div className="fl" style={{ marginBottom: 16 }}><label>Priority</label><select><option>Normal</option><option>High — needed before publish date</option></select></div>
             <div className="mbb">
               <button className="gb gbg" onClick={() => { setRevisionModal(false); setRevisionComment(""); setRevisionPost(null); }}>Cancel</button>
-              <button className="gb gba" onClick={handleRevision}><i className="ti ti-send" />Send revision request</button>
+              <button className="gb gba" disabled={submittingRevision} onClick={handleRevision}>
+                {submittingRevision
+                  ? <><span style={{ display: "inline-block", width: 11, height: 11, border: "2px solid rgba(255,255,255,.3)", borderTopColor: "#fff", borderRadius: "50%", animation: "spin 1s linear infinite" }} /> Sending…</>
+                  : <><i className="ti ti-send" />Send revision request</>}
+              </button>
             </div>
           </div>
         </div>

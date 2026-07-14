@@ -156,7 +156,10 @@ export default function ClientDetailPage() {
   useEffect(() => {
     (async () => {
       try {
-        const overview = await api.clients.getOverview(clientId);
+        const [overview] = await Promise.all([
+          api.clients.getOverview(clientId),
+          api.users.list().then(setAllUsers).catch(() => {}),
+        ]);
         setClient(overview.client);
         if (overview.strategies?.length) setStrategy(overview.strategies[0]);
         setPosts(overview.posts ?? []);
@@ -762,10 +765,11 @@ export default function ClientDetailPage() {
                   const isReview = ["AWAITING_APPROVAL","CREATIVE_UPLOADED"].includes(p.status);
                   const isPublished = p.status === "PUBLISHED";
                   const isGenerating = ["DRAFT","IN_DESIGN"].includes(p.status);
+                  const needsCreative = ["instagram","facebook"].includes(p.platform) && !(p.assets?.length > 0);
                   const { cls, icon, color } = isPublished ? { cls: "dqtp", icon: "ti-check", color: "var(--green)" }
-                    : isReview ? { cls: "dqtw", icon: "ti-photo", color: "var(--blue)" }
+                    : isReview ? { cls: "dqtw", icon: "ti-photo", color: needsCreative ? "var(--amber)" : "var(--blue)" }
                     : isRevision ? { cls: "dqtr", icon: "ti-alert-circle", color: "var(--red)" }
-                    : isGenerating ? { cls: "dqta", icon: "ti-robot", color: "var(--green)" }
+                    : isGenerating ? { cls: "dqta", icon: needsCreative ? "ti-photo-off" : "ti-robot", color: needsCreative ? "var(--amber)" : "var(--green)" }
                     : { cls: "dqti", icon: "ti-upload", color: "var(--amber)" };
                   const pillCls = isPublished ? "plg" : isReview ? "plb" : isRevision ? "plr" : isGenerating ? "pla" : "plp";
                   return (
@@ -776,12 +780,26 @@ export default function ClientDetailPage() {
                         <div style={{ fontSize: 12, fontWeight: 300, color: "var(--t1)" }}>{p.topic ?? p.hook ?? "Post"}</div>
                         <div style={{ fontSize: 10, color: "var(--t4)", marginTop: 2, fontWeight: 300 }}>
                           {p.scheduledDate ? new Date(p.scheduledDate).toLocaleDateString("en", { month: "short", day: "numeric" }) : "—"} · {p.platform} · {p.format} · {p.status?.replace(/_/g, " ")}
+                          {needsCreative && <span style={{ color: "var(--amber)", marginLeft: 6 }}>· creative required</span>}
                         </div>
                       </div>
                       <span className={`pl ${pillCls}`}>{p.status?.replace(/_/g, " ")}</span>
-                      {isReview && <div style={{ display: "flex", gap: 4 }}><button className="gb gbs gbp" onClick={(e) => { e.stopPropagation(); approvePost(p.id); }}>Approve</button><button className="gb gbs gba" onClick={(e) => { e.stopPropagation(); setSelectedPost(p); setSendModalContext("post"); setSendModal(true); }}>Client</button><button className="gb gbs gbr" onClick={(e) => { e.stopPropagation(); requestRevision(p.id); }}>Revise</button></div>}
+                      {isReview && (
+                        <div style={{ display: "flex", gap: 4 }}>
+                          <button className="gb gbs gbp" onClick={(e) => { e.stopPropagation(); approvePost(p.id); }}>Approve</button>
+                          {needsCreative
+                            ? <button className="gb gbs gbbl" onClick={(e) => { e.stopPropagation(); setUploadPostId(p.id); setUploadModal(true); }} title="Upload creative before sending to client"><i className="ti ti-upload" style={{ fontSize: 9 }} />Creative</button>
+                            : <button className="gb gbs gba" onClick={(e) => { e.stopPropagation(); setSelectedPost(p); setSendModalContext("post"); setSendModal(true); }}>Client</button>}
+                          <button className="gb gbs gbr" onClick={(e) => { e.stopPropagation(); requestRevision(p.id); }}>Revise</button>
+                        </div>
+                      )}
+                      {isGenerating && needsCreative && (
+                        <button className="gb gbs gbbl" onClick={(e) => { e.stopPropagation(); setUploadPostId(p.id); setUploadModal(true); }}>
+                          <i className="ti ti-upload" style={{ fontSize: 9 }} />Upload creative
+                        </button>
+                      )}
                       {isRevision && <div style={{ display: "flex", gap: 4 }}><button className="gb gbs" onClick={(e) => { e.stopPropagation(); setSelectedPost(p); setDrawerOpen(true); }}>Notes</button><button className="gb gbs gbbl" onClick={(e) => { e.stopPropagation(); setUploadPostId(p.id); setUploadModal(true); }}><i className="ti ti-upload" style={{ fontSize: 9 }} />Re-upload</button></div>}
-                      {!isReview && !isRevision && <button className="gb gbs" onClick={(e) => e.stopPropagation()}>View</button>}
+                      {!isReview && !isRevision && !(isGenerating && needsCreative) && <button className="gb gbs" onClick={(e) => e.stopPropagation()}>View</button>}
                     </div>
                   );
                   });
@@ -807,17 +825,32 @@ export default function ClientDetailPage() {
                     {selectedPost.creativeNote && <><div className="fll">Creative direction</div><div className="ib" style={{ fontSize: 10, marginBottom: 8 }}>{selectedPost.creativeNote}</div></>}
                     {selectedPost.hook && <><div className="fll">Hook</div><div className="ib" style={{ fontSize: 10, marginBottom: 10 }}>{selectedPost.hook}</div></>}
                   </div>
-                  <div className="sda">
-                    <button className="gb gbp" style={{ justifyContent: "center" }} disabled={!!postActionLoading} onClick={() => selectedPost && approvePost(selectedPost.id)}>
-                      {postActionLoading === "approve" ? <><span style={{ display: "inline-block", width: 11, height: 11, border: "2px solid rgba(0,0,0,.2)", borderTopColor: "#000", borderRadius: "50%", animation: "spin 1s linear infinite" }} /> Approving…</> : <><i className="ti ti-check" style={{ fontSize: 11 }} />{selectedPost?.status === "APPROVED" ? "Approved ✓" : "Approve"}</>}
-                    </button>
-                    <button className="gb gba" style={{ justifyContent: "center" }} disabled={!!postActionLoading} onClick={() => { setSendModalContext("post"); setSendModal(true); }}>
-                      <i className="ti ti-send" style={{ fontSize: 11 }} />Send to client
-                    </button>
-                    <button className="gb gbr" style={{ justifyContent: "center" }} disabled={!!postActionLoading} onClick={() => selectedPost && requestRevision(selectedPost.id)}>
-                      {postActionLoading === "revise" ? <><span style={{ display: "inline-block", width: 11, height: 11, border: "2px solid rgba(255,107,107,.3)", borderTopColor: "var(--red)", borderRadius: "50%", animation: "spin 1s linear infinite" }} /> Requesting…</> : <><i className="ti ti-refresh" style={{ fontSize: 11 }} />Request revision</>}
-                    </button>
-                  </div>
+                  {(() => {
+                    const drawerNeedsCreative = ["instagram","facebook"].includes(selectedPost.platform) && !(selectedPost.assets?.length > 0);
+                    return (
+                      <div className="sda">
+                        {drawerNeedsCreative && (
+                          <div style={{ padding: "8px 10px", background: "var(--ab)", border: "1px solid var(--abb)", borderRadius: 7, fontSize: 10, color: "var(--amber)", display: "flex", alignItems: "center", gap: 6 }}>
+                            <i className="ti ti-photo-off" style={{ fontSize: 11 }} />
+                            Creative required for {selectedPost.platform} before sending to client
+                          </div>
+                        )}
+                        <button className="gb gbp" style={{ justifyContent: "center" }} disabled={!!postActionLoading} onClick={() => selectedPost && approvePost(selectedPost.id)}>
+                          {postActionLoading === "approve" ? <><span style={{ display: "inline-block", width: 11, height: 11, border: "2px solid rgba(0,0,0,.2)", borderTopColor: "#000", borderRadius: "50%", animation: "spin 1s linear infinite" }} /> Approving…</> : <><i className="ti ti-check" style={{ fontSize: 11 }} />{selectedPost?.status === "APPROVED" ? "Approved ✓" : "Approve"}</>}
+                        </button>
+                        {drawerNeedsCreative
+                          ? <button className="gb gbbl" style={{ justifyContent: "center" }} onClick={() => { setUploadPostId(selectedPost.id); setUploadModal(true); }}>
+                              <i className="ti ti-upload" style={{ fontSize: 11 }} />Upload creative
+                            </button>
+                          : <button className="gb gba" style={{ justifyContent: "center" }} disabled={!!postActionLoading} onClick={() => { setSendModalContext("post"); setSendModal(true); }}>
+                              <i className="ti ti-send" style={{ fontSize: 11 }} />Send to client
+                            </button>}
+                        <button className="gb gbr" style={{ justifyContent: "center" }} disabled={!!postActionLoading} onClick={() => selectedPost && requestRevision(selectedPost.id)}>
+                          {postActionLoading === "revise" ? <><span style={{ display: "inline-block", width: 11, height: 11, border: "2px solid rgba(255,107,107,.3)", borderTopColor: "var(--red)", borderRadius: "50%", animation: "spin 1s linear infinite" }} /> Requesting…</> : <><i className="ti ti-refresh" style={{ fontSize: 11 }} />Request revision</>}
+                        </button>
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
             </div>
@@ -1028,20 +1061,40 @@ export default function ClientDetailPage() {
                     <div className="srl">Portal user</div>
                     <div className="srls">This person logs in as CLIENT to approve content</div>
                   </div>
-                  <select
-                    value={client.clientUserId ?? ""}
-                    onChange={async (e) => {
-                      const v = e.target.value;
-                      await api.clients.update(clientId, { clientUserId: v || null });
-                      setClient((prev: any) => ({ ...prev, clientUserId: v || null }));
-                    }}
-                    style={{ background: "var(--fi)", border: "1px solid var(--fi-b)", borderRadius: 7, padding: "5px 8px", fontSize: 10, color: "var(--t2)", outline: "none", cursor: "pointer", fontFamily: "Inter,system-ui", maxWidth: 180 }}
-                  >
-                    <option value="">— Not assigned —</option>
-                    {allUsers.filter((u: any) => u.role === "CLIENT").map((u: any) => (
-                      <option key={u.id} value={u.id}>{u.firstName} {u.lastName} ({u.email})</option>
-                    ))}
-                  </select>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 5, alignItems: "flex-end" }}>
+                    <select
+                      value={client.clientUserId ?? ""}
+                      onChange={async (e) => {
+                        const v = e.target.value;
+                        try {
+                          await api.clients.update(clientId, { clientUserId: v || null });
+                          setClient((prev: any) => ({ ...prev, clientUserId: v || null }));
+                          const picked = allUsers.find((u: any) => u.id === v);
+                          toast.success(
+                            v ? "Portal user assigned" : "Portal user removed",
+                            v && picked ? `${picked.firstName || picked.email} can now log in to the client portal.` : undefined,
+                          );
+                        } catch {
+                          toast.error("Failed to update", "Could not save portal user.");
+                        }
+                      }}
+                      style={{ background: "var(--fi)", border: "1px solid var(--fi-b)", borderRadius: 7, padding: "5px 8px", fontSize: 10, color: "#000", outline: "none", cursor: "pointer", fontFamily: "Inter,system-ui", maxWidth: 200 }}
+                    >
+                      <option value="" style={{ color: "#000" }}>— Not assigned —</option>
+                      {allUsers.filter((u: any) => u.role === "CLIENT").map((u: any) => (
+                        <option key={u.id} value={u.id} style={{ color: "#000" }}>{u.firstName || ""} {u.lastName || ""} ({u.email})</option>
+                      ))}
+                    </select>
+                    {client.clientUserId && (() => {
+                      const u = allUsers.find((x: any) => x.id === client.clientUserId);
+                      return u ? (
+                        <span style={{ fontSize: 9, color: "var(--green)" }}>
+                          <i className="ti ti-circle-check" style={{ fontSize: 9, marginRight: 3 }} />
+                          {[u.firstName, u.lastName].filter(Boolean).join(" ") || u.email}
+                        </span>
+                      ) : null;
+                    })()}
+                  </div>
                 </div>
                 <div className="slb" style={{ marginBottom: 8, marginTop: 14 }}>Connected channels</div>
                 {CHANNELS.map((ch) => {
