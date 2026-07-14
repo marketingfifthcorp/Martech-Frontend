@@ -170,6 +170,23 @@ export default function ClientDetailPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId]);
 
+  // Poll while strategy is awaiting client action so admin sees approval/changes without refreshing
+  useEffect(() => {
+    if (strategy?.status !== "SENT_TO_CLIENT") return;
+    const iv = setInterval(async () => {
+      try {
+        const strats = await api.strategy.listByClient(clientId);
+        const fresh = strats[0];
+        if (fresh && fresh.status !== "SENT_TO_CLIENT") {
+          setStrategy(fresh);
+          try { const ov = await api.clients.getOverview(clientId); setClient(ov.client); } catch {}
+        }
+      } catch {}
+    }, 8000);
+    return () => clearInterval(iv);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [strategy?.status, clientId]);
+
   useEffect(() => {
     if (tab !== 5) return;
     let cancelled = false;
