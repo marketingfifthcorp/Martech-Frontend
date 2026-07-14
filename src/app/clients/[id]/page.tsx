@@ -786,11 +786,15 @@ export default function ClientDetailPage() {
                       <span className={`pl ${pillCls}`}>{p.status?.replace(/_/g, " ")}</span>
                       {isReview && (
                         <div style={{ display: "flex", gap: 4 }}>
-                          <button className="gb gbs gbp" onClick={(e) => { e.stopPropagation(); approvePost(p.id); }}>Approve</button>
                           {needsCreative
-                            ? <button className="gb gbs gbbl" onClick={(e) => { e.stopPropagation(); setUploadPostId(p.id); setUploadModal(true); }} title="Upload creative before sending to client"><i className="ti ti-upload" style={{ fontSize: 9 }} />Creative</button>
-                            : <button className="gb gbs gba" onClick={(e) => { e.stopPropagation(); setSelectedPost(p); setSendModalContext("post"); setSendModal(true); }}>Client</button>}
-                          <button className="gb gbs gbr" onClick={(e) => { e.stopPropagation(); requestRevision(p.id); }}>Revise</button>
+                            ? <button className="gb gbs gbbl" onClick={(e) => { e.stopPropagation(); setUploadPostId(p.id); setUploadModal(true); }}>
+                                <i className="ti ti-upload" style={{ fontSize: 9 }} />Upload creative
+                              </button>
+                            : <>
+                                <button className="gb gbs gbp" onClick={(e) => { e.stopPropagation(); approvePost(p.id); }}>Approve</button>
+                                <button className="gb gbs gba" onClick={(e) => { e.stopPropagation(); setSelectedPost(p); setSendModalContext("post"); setSendModal(true); }}>Client</button>
+                                <button className="gb gbs gbr" onClick={(e) => { e.stopPropagation(); requestRevision(p.id); }}>Revise</button>
+                              </>}
                         </div>
                       )}
                       {isGenerating && needsCreative && (
@@ -829,25 +833,32 @@ export default function ClientDetailPage() {
                     const drawerNeedsCreative = ["instagram","facebook"].includes(selectedPost.platform) && !(selectedPost.assets?.length > 0);
                     return (
                       <div className="sda">
-                        {drawerNeedsCreative && (
-                          <div style={{ padding: "8px 10px", background: "var(--ab)", border: "1px solid var(--abb)", borderRadius: 7, fontSize: 10, color: "var(--amber)", display: "flex", alignItems: "center", gap: 6 }}>
-                            <i className="ti ti-photo-off" style={{ fontSize: 11 }} />
-                            Creative required for {selectedPost.platform} before sending to client
-                          </div>
-                        )}
-                        <button className="gb gbp" style={{ justifyContent: "center" }} disabled={!!postActionLoading} onClick={() => selectedPost && approvePost(selectedPost.id)}>
-                          {postActionLoading === "approve" ? <><span style={{ display: "inline-block", width: 11, height: 11, border: "2px solid rgba(0,0,0,.2)", borderTopColor: "#000", borderRadius: "50%", animation: "spin 1s linear infinite" }} /> Approving…</> : <><i className="ti ti-check" style={{ fontSize: 11 }} />{selectedPost?.status === "APPROVED" ? "Approved ✓" : "Approve"}</>}
-                        </button>
-                        {drawerNeedsCreative
-                          ? <button className="gb gbbl" style={{ justifyContent: "center" }} onClick={() => { setUploadPostId(selectedPost.id); setUploadModal(true); }}>
+                        {drawerNeedsCreative ? (
+                          <>
+                            <div style={{ padding: "8px 10px", background: "var(--ab)", border: "1px solid var(--abb)", borderRadius: 7, fontSize: 10, color: "var(--amber)", display: "flex", alignItems: "center", gap: 6 }}>
+                              <i className="ti ti-photo-off" style={{ fontSize: 11 }} />
+                              A creative must be uploaded before this {selectedPost.platform} post can be approved or sent to client
+                            </div>
+                            <button className="gb gbbl" style={{ justifyContent: "center" }} onClick={() => { setUploadPostId(selectedPost.id); setUploadModal(true); }}>
                               <i className="ti ti-upload" style={{ fontSize: 11 }} />Upload creative
                             </button>
-                          : <button className="gb gba" style={{ justifyContent: "center" }} disabled={!!postActionLoading} onClick={() => { setSendModalContext("post"); setSendModal(true); }}>
+                            <button className="gb gbr" style={{ justifyContent: "center" }} disabled={!!postActionLoading} onClick={() => selectedPost && requestRevision(selectedPost.id)}>
+                              <i className="ti ti-refresh" style={{ fontSize: 11 }} />Request revision
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button className="gb gbp" style={{ justifyContent: "center" }} disabled={!!postActionLoading} onClick={() => selectedPost && approvePost(selectedPost.id)}>
+                              {postActionLoading === "approve" ? <><span style={{ display: "inline-block", width: 11, height: 11, border: "2px solid rgba(0,0,0,.2)", borderTopColor: "#000", borderRadius: "50%", animation: "spin 1s linear infinite" }} /> Approving…</> : <><i className="ti ti-check" style={{ fontSize: 11 }} />{selectedPost?.status === "APPROVED" ? "Approved ✓" : "Approve"}</>}
+                            </button>
+                            <button className="gb gba" style={{ justifyContent: "center" }} disabled={!!postActionLoading} onClick={() => { setSendModalContext("post"); setSendModal(true); }}>
                               <i className="ti ti-send" style={{ fontSize: 11 }} />Send to client
-                            </button>}
-                        <button className="gb gbr" style={{ justifyContent: "center" }} disabled={!!postActionLoading} onClick={() => selectedPost && requestRevision(selectedPost.id)}>
-                          {postActionLoading === "revise" ? <><span style={{ display: "inline-block", width: 11, height: 11, border: "2px solid rgba(255,107,107,.3)", borderTopColor: "var(--red)", borderRadius: "50%", animation: "spin 1s linear infinite" }} /> Requesting…</> : <><i className="ti ti-refresh" style={{ fontSize: 11 }} />Request revision</>}
-                        </button>
+                            </button>
+                            <button className="gb gbr" style={{ justifyContent: "center" }} disabled={!!postActionLoading} onClick={() => selectedPost && requestRevision(selectedPost.id)}>
+                              {postActionLoading === "revise" ? <><span style={{ display: "inline-block", width: 11, height: 11, border: "2px solid rgba(255,107,107,.3)", borderTopColor: "var(--red)", borderRadius: "50%", animation: "spin 1s linear infinite" }} /> Requesting…</> : <><i className="ti ti-refresh" style={{ fontSize: 11 }} />Request revision</>}
+                            </button>
+                          </>
+                        )}
                       </div>
                     );
                   })()}
