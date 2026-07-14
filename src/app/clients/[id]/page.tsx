@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { DashboardShell } from "@/components/layout/DashboardShell";
 import { useApi } from "@/hooks/useApi";
+import { useToast } from "@/components/ui/Toast";
 
 const WORKFLOW_STEPS = [
   "Setup", "Strategy", "Approval", "Calendar",
@@ -117,7 +118,8 @@ function CalendarGrid({ posts, onPostClick }: { posts: any[]; onPostClick: (p: a
 }
 
 export default function ClientDetailPage() {
-  const api = useApi();
+  const api    = useApi();
+  const toast  = useToast();
   const params = useParams();
   const clientId = params.id as string;
   const [tab, setTab] = useState(0);
@@ -308,8 +310,16 @@ export default function ClientDetailPage() {
       if (sendModalContext === "strategy" && strategy) {
         await api.strategy.sendToClient(strategy.id);
         setStrategy((s: any) => ({ ...s, status: "SENT_TO_CLIENT" }));
+        toast.success(
+          "Strategy sent to client",
+          client.clientUserId
+            ? `${client.contactName || client.name} can now review it in their portal.`
+            : "Strategy marked as sent, but no portal user is assigned — go to Settings to link one.",
+        );
       }
-    } catch {}
+    } catch (e: any) {
+      toast.error("Failed to send", e?.message);
+    }
     setSendLoading(false);
     setSendModal(false);
   }
@@ -1042,6 +1052,14 @@ export default function ClientDetailPage() {
           <div className="mb">
             <div className="mbt">Send to client for approval</div>
             <div className="mbs">{client.contactName ?? "Client"} ({client.contactEmail ?? "—"}) will receive an email with a link to their portal.</div>
+            {!client.clientUserId && (
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "10px 12px", background: "var(--ab)", border: "1px solid var(--abb)", borderRadius: 8, marginBottom: 12 }}>
+                <i className="ti ti-alert-triangle" style={{ fontSize: 13, color: "var(--amber)", flexShrink: 0, marginTop: 1 }} />
+                <span style={{ fontSize: 11, color: "var(--t2)", fontWeight: 300, lineHeight: 1.5 }}>
+                  No portal user assigned to this client. Go to <strong>Settings → Portal user</strong> to link a CLIENT account, otherwise they won&apos;t be able to log in and see this strategy.
+                </span>
+              </div>
+            )}
             <div className="fl" style={{ marginBottom: 12 }}><label>Optional message</label><textarea placeholder="Add a note…" style={{ minHeight: 52 }} /></div>
             <div className="mbb">
               <button className="gb gbg" onClick={() => setSendModal(false)} disabled={sendLoading}>Cancel</button>

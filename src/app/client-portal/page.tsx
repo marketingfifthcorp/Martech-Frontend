@@ -33,7 +33,7 @@ function ClientPortalLayout({ children, activeTab, onTabChange, user, isDark, on
                 {user?.firstName?.[0]}{user?.lastName?.[0]}
               </div>
               <div>
-                <div style={{ fontSize: 12, fontWeight: 400, color: "var(--t1)" }}>{user?.firstName ?? "Client"}</div>
+                <div style={{ fontSize: 12, fontWeight: 400, color: "var(--t1)" }}>{user?.firstName ?? user?.email ?? "Client"}</div>
                 <div style={{ fontSize: 9, color: "var(--green)" }}>Active client</div>
               </div>
             </div>
@@ -53,7 +53,7 @@ function ClientPortalLayout({ children, activeTab, onTabChange, user, isDark, on
               <div className="av">{user?.firstName?.[0]}{user?.lastName?.[0]}</div>
               <div style={{ minWidth: 0 }}>
                 <div className="un" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {[user?.firstName, user?.lastName].filter(Boolean).join(" ") || "Client"}
+                  {[user?.firstName, user?.lastName].filter(Boolean).join(" ") || user?.email || "Client"}
                 </div>
                 <div className="uro">Client</div>
               </div>
@@ -133,10 +133,11 @@ export default function ClientPortalPage() {
     (async () => {
       try {
         const me = await api.users.me();
-        if (me.clientOf?.id) {
-          setPortalClientId(me.clientOf.id);
-          try { const strats = await api.strategy.listByClient(me.clientOf.id); if (strats.length) setStrategy(strats[0]); } catch {}
-          try { setPosts(await api.posts.listByClient(me.clientOf.id)); } catch {}
+        const clientId = me.clientOf?.[0]?.id;
+        if (clientId) {
+          setPortalClientId(clientId);
+          try { const strats = await api.strategy.listByClient(clientId); if (strats.length) setStrategy(strats[0]); } catch {}
+          try { setPosts(await api.posts.listByClient(clientId)); } catch {}
         }
       } catch {}
       finally { setLoading(false); }
@@ -213,7 +214,16 @@ export default function ClientPortalPage() {
       {/* ── Strategy ── */}
       {activeTab === "strategy" && (
         <div className="sa">
-          {(strategyApproved || strategy?.status === "APPROVED") ? (
+          {!portalClientId && (
+            <div style={{ border: "1px dashed var(--in-b)", borderRadius: 10, padding: 40, textAlign: "center" }}>
+              <i className="ti ti-link-off" style={{ fontSize: 32, display: "block", marginBottom: 10, color: "var(--t4)" }} />
+              <div style={{ fontSize: 13, color: "var(--t2)", fontWeight: 300, marginBottom: 6 }}>Account not linked to a workspace</div>
+              <div style={{ fontSize: 11, color: "var(--t4)", lineHeight: 1.6, maxWidth: 320, margin: "0 auto" }}>
+                Your agency needs to link your account in their admin panel before you can see strategy and content here. Please reach out to them to get set up.
+              </div>
+            </div>
+          )}
+          {portalClientId && (strategyApproved || strategy?.status === "APPROVED") ? (
             <div style={{ background: "var(--gb)", border: "1px solid var(--gbb)", borderRadius: 12, padding: 16, marginBottom: 14, display: "flex", alignItems: "center", gap: 12 }}>
               <i className="ti ti-circle-check" style={{ fontSize: 24, color: "var(--green)" }} />
               <div>
@@ -243,7 +253,7 @@ export default function ClientPortalPage() {
             </div>
           ) : null}
 
-          <div className="g2">
+          {portalClientId && <div className="g2">
             <div>
               {strategy ? (
                 <>
@@ -295,7 +305,7 @@ export default function ClientPortalPage() {
                 ))}
               </div>
             </div>
-          </div>
+          </div>}
         </div>
       )}
 
