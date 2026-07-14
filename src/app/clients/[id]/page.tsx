@@ -1089,11 +1089,11 @@ export default function ClientDetailPage() {
                           toast.error("Failed to update", "Could not save portal user.");
                         }
                       }}
-                      style={{ background: "var(--fi)", border: "1px solid var(--fi-b)", borderRadius: 7, padding: "5px 8px", fontSize: 10, color: "#000", outline: "none", cursor: "pointer", fontFamily: "Inter,system-ui", maxWidth: 200 }}
+                      style={{ background: "var(--fi)", border: "1px solid var(--fi-b)", borderRadius: 7, padding: "5px 8px", fontSize: 10, color: "#fff", outline: "none", cursor: "pointer", fontFamily: "Inter,system-ui", maxWidth: 200 }}
                     >
-                      <option value="" style={{ color: "#000" }}>— Not assigned —</option>
+                      <option value="" style={{ color: "#fff" }}>— Not assigned —</option>
                       {allUsers.filter((u: any) => u.role === "CLIENT").map((u: any) => (
-                        <option key={u.id} value={u.id} style={{ color: "#000" }}>{u.firstName || ""} {u.lastName || ""} ({u.email})</option>
+                        <option key={u.id} value={u.id} style={{ color: "#fff" }}>{u.firstName || ""} {u.lastName || ""} ({u.email})</option>
                       ))}
                     </select>
                     {client.clientUserId && (() => {
