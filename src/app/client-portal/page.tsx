@@ -213,7 +213,7 @@ export default function ClientPortalPage() {
       {/* ── Strategy ── */}
       {activeTab === "strategy" && (
         <div className="sa">
-          {strategyApproved || strategy?.status === "APPROVED" ? (
+          {(strategyApproved || strategy?.status === "APPROVED") ? (
             <div style={{ background: "var(--gb)", border: "1px solid var(--gbb)", borderRadius: 12, padding: 16, marginBottom: 14, display: "flex", alignItems: "center", gap: 12 }}>
               <i className="ti ti-circle-check" style={{ fontSize: 24, color: "var(--green)" }} />
               <div>
@@ -221,16 +221,27 @@ export default function ClientPortalPage() {
                 <div style={{ fontSize: 10, color: "var(--t3)", fontWeight: 300 }}>Your agency will proceed with the content calendar.</div>
               </div>
             </div>
-          ) : (
+          ) : strategy ? (
             <div style={{ background: "var(--gb)", border: "1px solid var(--gbb)", borderRadius: 12, padding: 16, marginBottom: 14 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
                 <div style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--green)" }} />
                 <div style={{ fontSize: 12, fontWeight: 400, color: "var(--green)" }}>New strategy ready for your review</div>
-                <div style={{ marginLeft: "auto", fontSize: 10, color: "var(--t4)" }}>Sent 2 days ago</div>
+                <div style={{ marginLeft: "auto", fontSize: 10, color: "var(--t4)" }}>{(() => {
+                  const ts = strategy.updatedAt ?? strategy.createdAt;
+                  if (!ts) return "";
+                  const diff = Date.now() - new Date(ts).getTime();
+                  const mins = Math.floor(diff / 60000);
+                  const hrs  = Math.floor(diff / 3600000);
+                  const days = Math.floor(diff / 86400000);
+                  if (mins < 1)  return "Just now";
+                  if (mins < 60) return `${mins}m ago`;
+                  if (hrs  < 24) return `${hrs}h ago`;
+                  return `${days}d ago`;
+                })()}</div>
               </div>
               <div style={{ fontSize: 11, color: "var(--t2)", lineHeight: 1.6, fontWeight: 300 }}>Your agency has prepared a social media strategy. Please review each section below and approve or request changes.</div>
             </div>
-          )}
+          ) : null}
 
           <div className="g2">
             <div>

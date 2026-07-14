@@ -193,7 +193,12 @@ export default function ClientDetailPage() {
       await new Promise((r) => setTimeout(r, 4000));
       try {
         const strats = await api.strategy.listByClient(clientId);
-        if (strats.length) { setStrategy(strats[0]); setGenerating(false); return; }
+        if (strats.length) {
+          setStrategy(strats[0]);
+          try { const ov = await api.clients.getOverview(clientId); setClient(ov.client); } catch {}
+          setGenerating(false);
+          return;
+        }
       } catch {}
     }
     setGenerating(false);
