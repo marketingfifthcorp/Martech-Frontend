@@ -14,6 +14,7 @@ const STEP_LABELS = [
 const INDUSTRIES = ["Fintech / Finance", "SaaS / Tech", "E-commerce / DTC", "Health & Wellness", "Retail", "Real estate", "Other"];
 
 type AssetKey = "guidelines" | "logo" | "brandKit" | "creative";
+type AssetFile = { id: string; file: File };
 
 const ASSET_CATEGORIES: { key: AssetKey; label: string; icon: string; accept: string; hint: string }[] = [
   { key: "guidelines", label: "Brand guidelines",        icon: "ti-file",    accept: ".pdf,.doc,.docx,.svg",           hint: "PDF · DOC · SVG" },
@@ -60,10 +61,11 @@ export default function OnboardingPage() {
   const [refs, setRefs] = useState<{ platform: string; url: string }[]>([]);
 
   // ── Step 1: brand assets ───────────────────────────────────
-  const [brandAssets, setBrandAssets] = useState<Record<AssetKey, File[]>>({
+  const [brandAssets, setBrandAssets] = useState<Record<AssetKey, AssetFile[]>>({
     guidelines: [], logo: [], brandKit: [], creative: [],
   });
   const [dragOver, setDragOver] = useState<AssetKey | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
 
   // ── Helpers ────────────────────────────────────────────────
   function clearError(field: string) {
@@ -77,11 +79,26 @@ export default function OnboardingPage() {
 
   function addFiles(key: AssetKey, files: FileList | null) {
     if (!files?.length) return;
-    setBrandAssets((prev) => ({ ...prev, [key]: [...prev[key], ...Array.from(files)] }));
+    const newItems: AssetFile[] = Array.from(files).map((file) => ({
+      id: `${Date.now()}-${Math.random()}`,
+      file,
+    }));
+    setBrandAssets((prev) => ({ ...prev, [key]: [...prev[key], ...newItems] }));
+    newItems.forEach(({ id }) => {
+      setUploadProgress((prev) => ({ ...prev, [id]: 0 }));
+      let pct = 0;
+      const iv = setInterval(() => {
+        pct = Math.min(100, pct + Math.random() * 22 + 8);
+        const rounded = Math.round(pct);
+        setUploadProgress((prev) => ({ ...prev, [id]: rounded }));
+        if (rounded >= 100) clearInterval(iv);
+      }, 120);
+    });
   }
 
-  function removeFile(key: AssetKey, idx: number) {
-    setBrandAssets((prev) => ({ ...prev, [key]: prev[key].filter((_, i) => i !== idx) }));
+  function removeFile(key: AssetKey, id: string) {
+    setBrandAssets((prev) => ({ ...prev, [key]: prev[key].filter((a) => a.id !== id) }));
+    setUploadProgress((prev) => { const n = { ...prev }; delete n[id]; return n; });
   }
 
   // ── Step 0 validation ──────────────────────────────────────
@@ -124,8 +141,8 @@ export default function OnboardingPage() {
         try {
           const brief = await api.briefs.create({ clientId: client.id });
           await Promise.all(
-            (Object.entries(brandAssets) as [AssetKey, File[]][]).flatMap(([, files]) =>
-              files.map((file) => api.briefs.uploadBrandAsset(brief.id, file))
+            (Object.entries(brandAssets) as [AssetKey, AssetFile[]][]).flatMap(([, items]) =>
+              items.map(({ file }) => api.briefs.uploadBrandAsset(brief.id, file))
             )
           );
         } catch {
@@ -298,9 +315,9 @@ export default function OnboardingPage() {
                     <span className="sbg">2.2</span>
                   </div>
 
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, alignItems: "start" }}>
                     {ASSET_CATEGORIES.map(({ key, label, icon, accept, hint }) => {
-                      const files = brandAssets[key];
+                      const items = brandAssets[key];
                       const isOver = dragOver === key;
                       return (
                         <div key={key} style={{ display: "flex", flexDirection: "column" }}>
@@ -313,7 +330,7 @@ export default function OnboardingPage() {
                             onChange={(e) => { addFiles(key, e.target.files); e.target.value = ""; }}
                             style={{ display: "none" }}
                           />
-                          <label htmlFor={`asset-${key}`} style={{ display: "block", cursor: "pointer", flex: 1 }}>
+                          <label htmlFor={`asset-${key}`} style={{ display: "block", cursor: "pointer" }}>
                             <div
                               className="ub"
                               onDragOver={(e) => { e.preventDefault(); setDragOver(key); }}
@@ -330,23 +347,38 @@ export default function OnboardingPage() {
                               <div className="ubs">{isOver ? "Release to add files" : `Click or drag & drop · ${hint}`}</div>
                             </div>
                           </label>
-                          {files.length > 0 && (
-                            <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 6 }}>
-                              {files.map((file, i) => (
-                                <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", background: "var(--in)", border: "1px solid var(--in-b)", borderRadius: 7 }}>
-                                  <i className="ti ti-paperclip" style={{ fontSize: 11, color: "var(--green)", flexShrink: 0 }} />
-                                  <span style={{ fontSize: 11, color: "var(--t1)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{file.name}</span>
-                                  <span style={{ fontSize: 10, color: "var(--t4)", flexShrink: 0 }}>
-                                    {file.size < 1024 * 1024 ? `${(file.size / 1024).toFixed(0)} KB` : `${(file.size / (1024 * 1024)).toFixed(1)} MB`}
-                                  </span>
-                                  <button
-                                    onClick={(e) => { e.stopPropagation(); removeFile(key, i); }}
-                                    style={{ background: "none", border: "none", cursor: "pointer", color: "var(--t4)", padding: 0, lineHeight: 1, flexShrink: 0 }}
-                                  >
-                                    <i className="ti ti-x" style={{ fontSize: 11 }} />
-                                  </button>
-                                </div>
-                              ))}
+                          {items.length > 0 && (
+                            <div style={{ display: "flex", flexDirection: "column", gap: 5, marginTop: 6 }}>
+                              {items.map((item) => {
+                                const pct = uploadProgress[item.id] ?? 100;
+                                const done = pct >= 100;
+                                return (
+                                  <div key={item.id} style={{ padding: "7px 10px", background: "var(--in)", border: "1px solid var(--in-b)", borderRadius: 7 }}>
+                                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                      <i className={`ti ${done ? "ti-paperclip" : "ti-upload"}`} style={{ fontSize: 11, color: "var(--green)", flexShrink: 0 }} />
+                                      <span style={{ fontSize: 11, color: "var(--t1)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.file.name}</span>
+                                      <span style={{ fontSize: 10, color: "var(--t4)", flexShrink: 0 }}>
+                                        {item.file.size < 1024 * 1024 ? `${(item.file.size / 1024).toFixed(0)} KB` : `${(item.file.size / (1024 * 1024)).toFixed(1)} MB`}
+                                      </span>
+                                      {done ? (
+                                        <button
+                                          onClick={(e) => { e.stopPropagation(); removeFile(key, item.id); }}
+                                          style={{ background: "none", border: "none", cursor: "pointer", color: "var(--t4)", padding: 0, lineHeight: 1, flexShrink: 0 }}
+                                        >
+                                          <i className="ti ti-x" style={{ fontSize: 11 }} />
+                                        </button>
+                                      ) : (
+                                        <span style={{ fontSize: 9, color: "var(--green)", flexShrink: 0, fontWeight: 500 }}>{pct}%</span>
+                                      )}
+                                    </div>
+                                    {!done && (
+                                      <div style={{ marginTop: 5, height: 2, background: "var(--in-b)", borderRadius: 1, overflow: "hidden" }}>
+                                        <div style={{ height: "100%", width: `${pct}%`, background: "var(--green)", borderRadius: 1, transition: "width 0.1s ease" }} />
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
                             </div>
                           )}
                         </div>
