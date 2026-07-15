@@ -40,6 +40,7 @@ export function useApi() {
       update: async (id: string, data: any) => clientsApi.update(id, data, await token()),
       updateStatus: async (id: string, status: string) =>
         clientsApi.updateStatus(id, status, await token()),
+      remove: async (id: string) => clientsApi.remove(id, await token()),
     },
     briefs: {
       listByClient: async (clientId: string) => briefsApi.listByClient(clientId, await token()),

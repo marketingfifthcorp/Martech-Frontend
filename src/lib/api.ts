@@ -75,6 +75,8 @@ export const clientsApi = {
     apiFetch<any>(`/clients/${id}`, { method: "PUT", body: data, token }),
   updateStatus: (id: string, status: string, token: string) =>
     apiFetch<any>(`/clients/${id}/status`, { method: "PATCH", body: { status }, token }),
+  remove: (id: string, token: string) =>
+    apiFetch<void>(`/clients/${id}`, { method: "DELETE", token }),
 };
 
 export const briefsApi = {

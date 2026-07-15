@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { DashboardShell } from "@/components/layout/DashboardShell";
 import { useApi } from "@/hooks/useApi";
@@ -119,8 +119,9 @@ function CalendarGrid({ posts, onPostClick }: { posts: any[]; onPostClick: (p: a
 
 export default function ClientDetailPage() {
   const api    = useApi();
-  const toast  = useToast();
-  const params = useParams();
+  const toast    = useToast();
+  const router   = useRouter();
+  const params   = useParams();
   const clientId = params.id as string;
   const [tab, setTab] = useState(0);
   const [client, setClient] = useState<any>(null);
@@ -152,6 +153,9 @@ export default function ClientDetailPage() {
   const [analytics, setAnalytics] = useState<any>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [analyticsPeriod, setAnalyticsPeriod] = useState<"15d" | "30d" | "60d" | "90d">("30d");
+  const [deleteModal, setDeleteModal] = useState(false);
+  const [deleteConfirmName, setDeleteConfirmName] = useState("");
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -226,15 +230,19 @@ export default function ClientDetailPage() {
   async function generateStrategy() {
     if (!client?.briefs?.[0]?.id) return;
     setGenerating(true);
-    // Fire generation — it takes ~30-60s and the HTTP connection may timeout, but the
-    // backend will complete regardless. We poll for the result instead of awaiting inline.
+    // Fire generation — takes ~30-90s; HTTP may timeout but backend still completes.
+    // We poll until status leaves GENERATING, not just until the record exists.
     api.strategy.generate(client.briefs[0].id).catch(() => {});
-    for (let i = 0; i < 22; i++) {
+    for (let i = 0; i < 30; i++) {
       await new Promise((r) => setTimeout(r, 4000));
       try {
         const strats = await api.strategy.listByClient(clientId);
-        if (strats.length) {
-          setStrategy(strats[0]);
+        if (!strats.length) continue;
+        const s = strats[0];
+        // Always update UI so the generating state is visible
+        setStrategy(s);
+        // Only stop polling once AI has finished (status moves past GENERATING/DRAFT)
+        if (!["GENERATING", "DRAFT"].includes(s.status)) {
           try { const ov = await api.clients.getOverview(clientId); setClient(ov.client); } catch {}
           setGenerating(false);
           return;
@@ -384,6 +392,18 @@ export default function ClientDetailPage() {
     setUploading(false);
   }
 
+  async function handleDeleteClient() {
+    if (deleteConfirmName.trim() !== client?.name?.trim()) return;
+    setDeleting(true);
+    try {
+      await api.clients.remove(clientId);
+      router.replace("/clients");
+    } catch {
+      toast.error("Delete failed", "Something went wrong. Please try again.");
+      setDeleting(false);
+    }
+  }
+
   useEffect(() => {
     const p = new URLSearchParams(window.location.search);
     const t = p.get("tab");
@@ -393,6 +413,10 @@ export default function ClientDetailPage() {
     const msg = p.get("msg");
     if (connected) setConnectionToast({ type: "success", platform: connected });
     else if (error) setConnectionToast({ type: "error", platform: error, msg: msg ?? undefined });
+    // Strip query params so banner doesn't reappear on refresh
+    if (connected || error || t) {
+      window.history.replaceState({}, "", window.location.pathname);
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1131,7 +1155,7 @@ export default function ClientDetailPage() {
                 })}
                 <div className="slb" style={{ marginBottom: 8, marginTop: 14, color: "var(--red)" }}>Danger zone</div>
                 <div className="sr2" style={{ border: "1px solid var(--rbb)" }}><div><div className="srl">Archive client</div><div className="srls">Hides from dashboard, keeps data</div></div><button className="gb gbs gbr">Archive</button></div>
-                <div className="sr2" style={{ border: "1px solid var(--rbb)" }}><div><div className="srl">Delete client</div><div className="srls">Permanent — irreversible</div></div><button className="gb gbs gbr">Delete</button></div>
+                <div className="sr2" style={{ border: "1px solid var(--rbb)" }}><div><div className="srl">Delete client</div><div className="srls">Permanent — all data, posts, and assets will be erased</div></div><button className="gb gbs gbr" onClick={() => { setDeleteConfirmName(""); setDeleteModal(true); }}>Delete</button></div>
               </div>
               <div>
                 <div className="slb" style={{ marginBottom: 8 }}>Notifications</div>
@@ -1222,6 +1246,48 @@ export default function ClientDetailPage() {
               <button className="gb gbg" onClick={() => { setUploadModal(false); setUploadPostId(null); setUploadFile(null); }} disabled={uploading}>Cancel</button>
               <button className="gb gbp" onClick={handleUploadAsset} disabled={!uploadFile || uploading}>
                 {uploading ? <><span style={{ display: "inline-block", width: 12, height: 12, border: "2px solid rgba(255,255,255,.3)", borderTopColor: "#fff", borderRadius: "50%", animation: "spin 1s linear infinite" }} /> Uploading…</> : <><i className="ti ti-upload" /> Upload &amp; submit</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete client modal */}
+      {deleteModal && (
+        <div className="mo" onClick={(e) => { if (e.target === e.currentTarget && !deleting) setDeleteModal(false); }}>
+          <div className="mb">
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: "var(--rb)", border: "1px solid var(--rbb)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <i className="ti ti-trash" style={{ fontSize: 16, color: "var(--red)" }} />
+              </div>
+              <div className="mbt" style={{ margin: 0 }}>Delete {client?.name}?</div>
+            </div>
+            <div className="mbs" style={{ marginBottom: 16 }}>
+              This is permanent and cannot be undone. All strategies, posts, calendars, creative assets, and platform connections for this client will be permanently deleted.
+            </div>
+            <div className="fl" style={{ marginBottom: 6 }}>
+              <label>
+                Type <strong style={{ color: "var(--red)", userSelect: "all" }}>{client?.name}</strong> to confirm
+              </label>
+              <input
+                value={deleteConfirmName}
+                onChange={(e) => setDeleteConfirmName(e.target.value)}
+                placeholder={client?.name}
+                style={{ border: `1px solid ${deleteConfirmName === client?.name ? "var(--rbb)" : "var(--fi-b)"}`, background: "var(--fi)" }}
+                autoFocus
+                onKeyDown={(e) => { if (e.key === "Enter" && deleteConfirmName.trim() === client?.name?.trim()) handleDeleteClient(); }}
+              />
+            </div>
+            <div className="mbb">
+              <button className="gb gbg" onClick={() => setDeleteModal(false)} disabled={deleting}>Cancel</button>
+              <button
+                className="gb gbr"
+                disabled={deleteConfirmName.trim() !== client?.name?.trim() || deleting}
+                onClick={handleDeleteClient}
+              >
+                {deleting
+                  ? <><span style={{ display: "inline-block", width: 12, height: 12, border: "2px solid rgba(255,255,255,.3)", borderTopColor: "#fff", borderRadius: "50%", animation: "spin 1s linear infinite" }} /> Deleting…</>
+                  : <><i className="ti ti-trash" /> Delete permanently</>}
               </button>
             </div>
           </div>
